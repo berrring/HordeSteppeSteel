@@ -520,9 +520,15 @@ func update_resources():
 	if player.is_empty():
 		return
 		
+	var p_faction = gm.current_faction
+	var player_f = gm.factions.get(p_faction, {})
+	if lbl_faction and not player_f.is_empty():
+		lbl_faction.text = "⚔ " + player_f.name.to_upper()
+		lbl_faction.add_theme_color_override("font_color", player_f.get("color", Palette.BRONZE_GOLD))
+		
 	var income = {"gold": 0, "food": 0, "wood": 0}
 	for pid in gm.provinces:
-		if gm.provinces[pid].owner == "mongol":
+		if gm.provinces[pid].owner == p_faction:
 			income.gold += gm.provinces[pid].income_gold
 			income.food += gm.provinces[pid].income_food
 			income.wood += gm.provinces[pid].income_wood
@@ -531,7 +537,7 @@ func update_resources():
 	lbl_gold.text = "💰 %dg (+%d)" % [player.gold, income.gold]
 	lbl_food.text = "🌾 %df (+%d)" % [player.food, income.food]
 	lbl_wood.text = "🪵 %dw (+%d)" % [player.wood, income.wood]
-	var p_count = gm.province_count("mongol")
+	var p_count = gm.province_count(p_faction)
 	lbl_provinces.text = "🏛 Prov: %d / %d" % [p_count, gm.provinces_to_win]
 	
 	if lbl_act:
@@ -556,7 +562,7 @@ func select_province(pid: String):
 		return
 		
 	var p = gm.provinces[pid]
-	var is_player = (p.owner == "mongol")
+	var is_player = (p.owner == gm.current_faction)
 	left_panel.visible = true
 	
 	var cap_tag = " [CAPITAL]" if p.is_capital else ""

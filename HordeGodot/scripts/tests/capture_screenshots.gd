@@ -21,6 +21,18 @@ func _run_capture():
 	if img_menu:
 		img_menu.save_png("res://screenshots/main_menu.png")
 		print("Saved res://screenshots/main_menu.png")
+		
+	# Step 1b: Capture Faction Selection Modal
+	print("Capturing Faction Selection Modal...")
+	menu._on_new_campaign_pressed()
+	for f in range(20):
+		await process_frame
+		
+	var img_fact = root.get_viewport().get_texture().get_image()
+	if img_fact:
+		img_fact.save_png("res://screenshots/faction_selection.png")
+		print("Saved res://screenshots/faction_selection.png")
+		
 	menu.free()
 	
 	# Step 2: Capture Campaign Map View

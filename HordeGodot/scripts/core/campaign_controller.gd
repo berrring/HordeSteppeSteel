@@ -48,10 +48,18 @@ func _ready():
 		map_3d.build_map(gm.provinces)
 		hud.update_resources()
 		
-		# Focus camera on player capital (Sarai)
-		if gm.provinces.has("sarai"):
-			var sarai = gm.provinces["sarai"]
-			camera_rig.focus_on(Vector3(sarai.x, 0, sarai.z), 13.0)
+		# Focus camera on player capital or first owned province
+		var cap_pid = ""
+		for pid in gm.provinces:
+			if gm.provinces[pid].owner == gm.current_faction:
+				if gm.provinces[pid].is_capital:
+					cap_pid = pid
+					break
+				elif cap_pid == "":
+					cap_pid = pid
+		if cap_pid != "" and gm.provinces.has(cap_pid):
+			var cap_p = gm.provinces[cap_pid]
+			camera_rig.focus_on(Vector3(cap_p.x, 0, cap_p.z), 13.0)
 
 func _setup_environment():
 	# Directional Sun
@@ -124,11 +132,15 @@ func _on_attack(attacker_pid: String, defender_pid: String):
 		
 	# First animate army marching to the target border
 	map_3d.animate_army_march(attacker_pid, defender_pid, func():
+		hud.visible = false
 		var battle = TacticalBattle.new()
 		battle.name = "ActiveBattle"
 		add_child(battle)
 		battle.setup_battle(attacker_pid, defender_pid)
-		battle.battle_completed.connect(_on_tactical_battle_completed)
+		battle.battle_completed.connect(func(res: Dictionary):
+			hud.visible = true
+			_on_tactical_battle_completed(res)
+		)
 	)
 
 func _on_tactical_battle_completed(result: Dictionary):
@@ -138,6 +150,7 @@ func _on_tactical_battle_completed(result: Dictionary):
 		
 	map_3d.refresh_all(gm.provinces)
 	hud.update_resources()
+	hud.deselect_province()
 	
 	var def_pid = result.defender_pid
 	if gm.provinces.has(def_pid):
@@ -145,7 +158,8 @@ func _on_tactical_battle_completed(result: Dictionary):
 		if result.winner == "attacker":
 			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "CAPTURED!", Color(1.0, 0.88, 0.3))
 			hud.select_province(def_pid)
-			hud.log_event("Victory! Province of %s swearing fealty to the Golden Horde." % p.name)
+			var faction_name = gm.factions[gm.current_faction].name if gm.factions.has(gm.current_faction) else "Our Realm"
+			hud.log_event("Victory! Province of %s swearing fealty to the %s." % [p.name, faction_name])
 		else:
 			hud.log_event("Assault on %s was repulsed." % p.name)
 			
@@ -163,7 +177,7 @@ func _on_recruit(unit_type: String):
 		
 	var pid = hud.selected_pid
 	var p = gm.provinces.get(pid, null)
-	if p == null or p.owner != "mongol":
+	if p == null or p.owner != gm.current_faction:
 		return
 		
 	var stats = gm.get_unit_stats(unit_type)
@@ -181,7 +195,7 @@ func _on_recruit(unit_type: String):
 	_play_audio("recruit")
 	
 	if p.army == null:
-		p.army = {"faction": "mongol", "units": []}
+		p.army = {"faction": gm.current_faction, "units": []}
 		
 	# Find existing unit group or add new
 	var found = false
@@ -206,7 +220,7 @@ func _on_construct(building_type: String):
 		
 	var pid = hud.selected_pid
 	var p = gm.provinces.get(pid, null)
-	if p == null or p.owner != "mongol":
+	if p == null or p.owner != gm.current_faction:
 		return
 		
 	var player = gm.get_player_faction()

@@ -26,10 +26,11 @@ var battle_context: Dictionary = {}
 func _ready():
 	pass
 
-func start_new_campaign():
+func start_new_campaign(chosen_faction: String = "mongol"):
 	# Build campaign data
 	_build_provinces()
-	_build_factions()
+	_build_factions(chosen_faction)
+	current_faction = chosen_faction
 	turn = 1
 	current_state = GameState.CAMPAIGN
 	state_changed.emit("campaign")
@@ -91,14 +92,14 @@ func _build_provinces():
 			if not provinces[e[1]].neighbors.has(e[0]):
 				provinces[e[1]].neighbors.append(e[0])
 
-func _build_factions():
+func _build_factions(chosen_faction: String = "mongol"):
 	factions.clear()
 	# 1. Mongol Khanate (The Golden Horde) - Player Faction
 	factions["mongol"] = {
 		"id": "mongol",
 		"name": "Mongol Khanate",
 		"color": Palette.FACTION_MONGOL,
-		"is_player": true,
+		"is_player": (chosen_faction == "mongol"),
 		"gold": 500, "food": 300, "wood": 200,
 		"is_defeated": false,
 		"bonus_attack": 1.15,
@@ -110,7 +111,7 @@ func _build_factions():
 		"id": "cuman",
 		"name": "Cumans / Kipchaks",
 		"color": Palette.FACTION_CUMAN,
-		"is_player": false,
+		"is_player": (chosen_faction == "cuman"),
 		"gold": 350, "food": 320, "wood": 200,
 		"is_defeated": false,
 		"bonus_attack": 1.1,
@@ -122,7 +123,7 @@ func _build_factions():
 		"id": "rus",
 		"name": "Rus' Principalities",
 		"color": Palette.FACTION_RUS,
-		"is_player": false,
+		"is_player": (chosen_faction == "rus"),
 		"gold": 400, "food": 350, "wood": 400,
 		"is_defeated": false,
 		"bonus_attack": 1.0,
@@ -134,7 +135,7 @@ func _build_factions():
 		"id": "byzantine",
 		"name": "Byzantine Empire",
 		"color": Palette.FACTION_BYZANTINE,
-		"is_player": false,
+		"is_player": (chosen_faction == "byzantine"),
 		"gold": 450, "food": 250, "wood": 250,
 		"is_defeated": false,
 		"bonus_attack": 1.05,
@@ -146,7 +147,7 @@ func _build_factions():
 		"id": "seljuk",
 		"name": "Seljuk Sultanate",
 		"color": Palette.FACTION_SELJUK,
-		"is_player": false,
+		"is_player": (chosen_faction == "seljuk"),
 		"gold": 400, "food": 300, "wood": 250,
 		"is_defeated": false,
 		"bonus_attack": 1.1,
@@ -158,7 +159,7 @@ func _build_factions():
 		"id": "khwarazm",
 		"name": "Khwarazmshah Dynasty",
 		"color": Palette.FACTION_KHWARAZM,
-		"is_player": false,
+		"is_player": (chosen_faction == "khwarazm"),
 		"gold": 400, "food": 280, "wood": 300,
 		"is_defeated": false,
 		"bonus_attack": 1.05,
@@ -259,7 +260,7 @@ func get_province_owner_faction(province_id: String) -> Dictionary:
 	return factions[owner_id]
 
 func get_player_faction() -> Dictionary:
-	return factions.get("mongol", {})
+	return factions.get(current_faction, {})
 
 func collect_income(faction_id: String) -> Dictionary:
 	var income = {"gold": 0, "food": 0, "wood": 0}
@@ -290,12 +291,12 @@ func province_count(faction_id: String) -> int:
 	return count
 
 func check_victory() -> String:
-	var player_provinces = province_count("mongol")
+	var player_provinces = province_count(current_faction)
 	if player_provinces >= provinces_to_win:
 		return "win"
 	var all_defeated = true
 	for fid in factions:
-		if fid == "mongol":
+		if fid == current_faction:
 			continue
 		if not factions[fid].is_defeated:
 			all_defeated = false
@@ -306,7 +307,7 @@ func check_victory() -> String:
 		# Check if player has any armies anywhere
 		var has_army = false
 		for pid in provinces:
-			if provinces[pid].army != null and provinces[pid].army.faction == "mongol":
+			if provinces[pid].army != null and provinces[pid].army.faction == current_faction:
 				has_army = true
 				break
 		if not has_army:
@@ -370,7 +371,7 @@ func resolve_battle(attacker_pid: String, defender_pid: String) -> Dictionary:
 
 func end_turn():
 	# Player income
-	collect_income("mongol")
+	collect_income(current_faction)
 	turn += 1
 	# AI turns
 	_run_ai_turns()
@@ -386,7 +387,7 @@ func end_turn():
 
 func _run_ai_turns():
 	for fid in factions:
-		if fid == "mongol" or factions[fid].is_defeated:
+		if fid == current_faction or factions[fid].is_defeated:
 			continue
 		_ai_turn(fid)
 
@@ -447,6 +448,7 @@ func _ai_attack(faction_id: String):
 func save_game(path: String = "user://savegame.json") -> bool:
 	var save_data = {
 		"turn": turn,
+		"current_faction": current_faction,
 		"provinces": provinces,
 		"factions": factions,
 	}
@@ -470,6 +472,7 @@ func load_game(path: String = "user://savegame.json") -> bool:
 		return false
 	var data = json.data
 	turn = data.get("turn", 1)
+	current_faction = data.get("current_faction", "mongol")
 	provinces = data.get("provinces", {})
 	factions = data.get("factions", {})
 	current_state = GameState.CAMPAIGN

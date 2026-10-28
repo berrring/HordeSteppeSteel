@@ -1,9 +1,13 @@
 class_name TacticalBattle
-extends Control
+extends CanvasLayer
 
 signal battle_completed(result: Dictionary)
 
 const ModelBuilder = preload("res://scripts/visuals/model_builder.gd")
+const Palette = preload("res://scripts/core/palette.gd")
+
+func _init():
+	layer = 15
 
 # Battle Data
 var attacker_faction: String = "mongol"

@@ -242,6 +242,31 @@ func _init():
 	test.call("MovementPath3D hides on command", not m_path.visible)
 	m_path.free()
 	
+	# Test 17: Dynamic Faction Selection & Playable Civilizations
+	gm.start_new_campaign("rus")
+	test.call("Starting campaign as 'rus' sets current_faction to 'rus'", gm.current_faction == "rus")
+	test.call("Player faction is marked as Rus'", gm.get_player_faction().name == "Rus' Principalities")
+	test.call("Rus starts with 3 provinces", gm.province_count("rus") == 3)
+	
+	gm.start_new_campaign("byzantine")
+	test.call("Starting campaign as 'byzantine' sets current_faction to 'byzantine'", gm.current_faction == "byzantine")
+	test.call("Player faction is marked as Byzantine Empire", gm.get_player_faction().name == "Byzantine Empire")
+	
+	gm.start_new_campaign("cuman")
+	test.call("Starting campaign as 'cuman' sets current_faction to 'cuman'", gm.current_faction == "cuman")
+	
+	# Test 18: Main Menu Faction Selection Modal & Catalog
+	var menu = load("res://scenes/main_menu/main_menu.tscn").instantiate()
+	root.add_child(menu)
+	menu._ready()
+	test.call("Main menu has FactionSelectModal", menu.faction_modal != null)
+	test.call("FACTIONS_CATALOG contains all 6 canonical civilizations", menu.FACTIONS_CATALOG.size() == 6)
+	test.call("Catalog contains Rus' civilization with traits and bonuses", menu.FACTIONS_CATALOG.has("rus") and menu.FACTIONS_CATALOG["rus"].bonuses.size() > 0)
+	test.call("Catalog contains Byzantine civilization with traits and bonuses", menu.FACTIONS_CATALOG.has("byzantine") and menu.FACTIONS_CATALOG["byzantine"].bonuses.size() > 0)
+	test.call("Catalog contains Seljuk civilization with traits and bonuses", menu.FACTIONS_CATALOG.has("seljuk") and menu.FACTIONS_CATALOG["seljuk"].bonuses.size() > 0)
+	test.call("Catalog contains Khwarazm civilization with traits and bonuses", menu.FACTIONS_CATALOG.has("khwarazm") and menu.FACTIONS_CATALOG["khwarazm"].bonuses.size() > 0)
+	menu.free()
+	
 	# Clean up any test instances in root
 	if gm:
 		gm.free()
