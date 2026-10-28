@@ -802,7 +802,14 @@ func _on_autoresolve_pressed():
 				target.count = max(0, target.count - dmg)
 		if _check_battle_over():
 			return
-	_finish_combat(true)
+	# If time runs out, evaluate based on surviving strength
+	var att_living = 0
+	for sq in attacker_squads:
+		att_living += sq.count
+	var def_living = 0
+	for sq in defender_squads:
+		def_living += sq.count
+	_finish_combat(att_living >= def_living)
 
 func _on_retreat_pressed():
 	if is_busy:

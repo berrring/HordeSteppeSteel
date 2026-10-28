@@ -305,7 +305,7 @@ func _on_end_turn():
 	gm.end_turn()
 	map_3d.refresh_all(gm.provinces)
 	hud.update_resources()
-	_update_act_atmosphere(gm.turn, gm.province_count("mongol"))
+	_update_act_atmosphere(gm.turn, gm.province_count(gm.current_faction))
 	hud.log_event("Turn %d began. Income collected across your territories." % gm.turn)
 	
 	# Re-select current if still valid
