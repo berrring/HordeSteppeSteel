@@ -26,9 +26,15 @@ func _generate_sheets():
 	var env_node = WorldEnvironment.new()
 	var env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.12, 0.10, 0.08)
+	env.background_color = Color(0.16, 0.19, 0.24)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.5, 0.46, 0.42)
+	env.ambient_light_color = Color(0.55, 0.50, 0.44)
+	env.ambient_light_energy = 0.95
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.15
+	env.glow_enabled = true
+	env.glow_intensity = 0.35
+	env.glow_bloom = 0.10
 	env_node.environment = env
 	sheet_root.add_child(env_node)
 	
@@ -40,16 +46,28 @@ func _generate_sheets():
 	cam.current = true
 	sheet_root.add_child(cam)
 	
-	# Diorama Base Platter
+	# Tier 1: Cliff base
+	var p_base = MeshInstance3D.new()
+	var c_mesh = CylinderMesh.new()
+	c_mesh.top_radius = 8.6
+	c_mesh.bottom_radius = 9.0
+	c_mesh.height = 0.45
+	c_mesh.radial_segments = 24
+	p_base.mesh = c_mesh
+	p_base.material_override = ModelBuilder.get_mat("cliff_bedrock")
+	p_base.position = Vector3(0, -0.3, 0)
+	sheet_root.add_child(p_base)
+	
+	# Tier 2: Lush Grass Top Platter
 	var platter = MeshInstance3D.new()
 	var cyl = CylinderMesh.new()
-	cyl.top_radius = 8.5
-	cyl.bottom_radius = 8.8
-	cyl.height = 0.4
+	cyl.top_radius = 8.4
+	cyl.bottom_radius = 8.6
+	cyl.height = 0.18
 	cyl.radial_segments = 24
 	platter.mesh = cyl
-	platter.material_override = ModelBuilder.get_mat("dirt_road")
-	platter.position = Vector3(0, -0.2, 0)
+	platter.material_override = ModelBuilder.get_mat("steppe_grass")
+	platter.position = Vector3(0, 0.0, 0)
 	sheet_root.add_child(platter)
 	
 	# Row 1 (Units in Front, Z ~ 1.0):

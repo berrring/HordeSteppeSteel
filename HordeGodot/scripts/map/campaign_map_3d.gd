@@ -76,7 +76,7 @@ func _build_connecting_roads(provinces_data: Dictionary):
 	
 	for pid in provinces_data:
 		var p1 = provinces_data[pid]
-		var pos1 = Vector3(p1.x, 0.02, p1.z)
+		var pos1 = Vector3(p1.x, 0.06, p1.z)
 		
 		for neighbor_id in p1.neighbors:
 			var edge_key = [pid, neighbor_id]
@@ -89,23 +89,31 @@ func _build_connecting_roads(provinces_data: Dictionary):
 			
 			if provinces_data.has(neighbor_id):
 				var p2 = provinces_data[neighbor_id]
-				var pos2 = Vector3(p2.x, 0.02, p2.z)
+				var pos2 = Vector3(p2.x, 0.06, p2.z)
 				
-				# Create low-poly dirt road strip
 				var dir = pos2 - pos1
 				var dist = dir.length()
 				var mid = (pos1 + pos2) * 0.5
 				
-				var road_mesh = MeshInstance3D.new()
-				var mesh = BoxMesh.new()
-				mesh.size = Vector3(0.35, 0.04, dist * 0.72) # Leaves margin around settlements
-				road_mesh.mesh = mesh
-				road_mesh.material_override = mat_road
-				road_mesh.position = mid
+				# Check if this road crosses the central river line (between X=-2 and X=2)
+				var is_river_crossing = (pos1.x * pos2.x < 0 or (abs(mid.x) < 1.2 and abs(mid.z) < 2.5))
 				
-				# Orient towards target
-				road_mesh.rotation.y = atan2(dir.x, dir.z)
-				road_container.add_child(road_mesh)
+				if is_river_crossing:
+					# Place a stylized wooden bridge over the river
+					var bridge = ModelBuilder.create_bridge(dist * 0.45, 0.5)
+					bridge.position = mid + Vector3(0, 0.05, 0)
+					bridge.rotation.y = atan2(dir.x, dir.z)
+					road_container.add_child(bridge)
+				else:
+					# Create low-poly dirt road strip
+					var road_mesh = MeshInstance3D.new()
+					var mesh = BoxMesh.new()
+					mesh.size = Vector3(0.42, 0.05, dist * 0.70)
+					road_mesh.mesh = mesh
+					road_mesh.material_override = mat_road
+					road_mesh.position = mid
+					road_mesh.rotation.y = atan2(dir.x, dir.z)
+					road_container.add_child(road_mesh)
 
 func _build_river():
 	# Distinct historical river winding from northern forests down through steppe
@@ -120,6 +128,7 @@ func _build_river():
 	]
 	
 	var mat_water = ModelBuilder.get_mat("water")
+	var mat_bank = ModelBuilder.get_mat("arid_steppe")
 	
 	for i in range(river_points.size() - 1):
 		var p1 = river_points[i]
@@ -127,14 +136,26 @@ func _build_river():
 		var dir = p2 - p1
 		var dist = dir.length()
 		var mid = (p1 + p2) * 0.5
+		var angle = atan2(dir.x, dir.z)
 		
+		# River Sandy/Gravel Bank Bed
+		var bank_mesh = MeshInstance3D.new()
+		var b_box = BoxMesh.new()
+		b_box.size = Vector3(1.2, 0.06, dist)
+		bank_mesh.mesh = b_box
+		bank_mesh.material_override = mat_bank
+		bank_mesh.position = mid + Vector3(0, -0.04, 0)
+		bank_mesh.rotation.y = angle
+		river_container.add_child(bank_mesh)
+		
+		# Stylized Water Surface with specular gloss
 		var r_mesh = MeshInstance3D.new()
 		var box = BoxMesh.new()
-		box.size = Vector3(0.7, 0.08, dist)
+		box.size = Vector3(0.85, 0.08, dist)
 		r_mesh.mesh = box
 		r_mesh.material_override = mat_water
 		r_mesh.position = mid
-		r_mesh.rotation.y = atan2(dir.x, dir.z)
+		r_mesh.rotation.y = angle
 		river_container.add_child(r_mesh)
 
 func _on_province_clicked(pid: String):

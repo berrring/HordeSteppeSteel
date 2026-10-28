@@ -49,28 +49,56 @@ func _build_terrain():
 	
 	var mat = ModelBuilder.get_mat(mat_name)
 	
-	# Hex-like low-poly terrain plateau (radius 1.8, height 0.3)
+	# Layer 1: Layered earthy cliff bedrock base (height 0.45m)
+	var cliff_mesh = MeshInstance3D.new()
+	var c_mesh = CylinderMesh.new()
+	c_mesh.top_radius = 1.82
+	c_mesh.bottom_radius = 1.96
+	c_mesh.height = 0.44
+	c_mesh.radial_segments = 7 # Stylized hex-boardgame faceted silhouette
+	cliff_mesh.mesh = c_mesh
+	cliff_mesh.material_override = ModelBuilder.get_mat("cliff_bedrock")
+	cliff_mesh.position = Vector3(0, -0.22, 0)
+	cliff_mesh.name = "BedrockBase"
+	add_child(cliff_mesh)
+	
+	# Layer 2: Bevelled vibrant top grass plate (height 0.14m)
 	terrain_mesh = MeshInstance3D.new()
 	var mesh = CylinderMesh.new()
-	mesh.top_radius = 1.65
-	mesh.bottom_radius = 1.8
-	mesh.height = 0.35
-	mesh.radial_segments = 7 # Stylized faceted look
+	mesh.top_radius = 1.70
+	mesh.bottom_radius = 1.82
+	mesh.height = 0.14
+	mesh.radial_segments = 7
 	terrain_mesh.mesh = mesh
 	terrain_mesh.material_override = mat
-	terrain_mesh.position = Vector3(0, -0.175, 0)
+	terrain_mesh.position = Vector3(0, 0.05, 0)
+	terrain_mesh.name = "GrassCap"
 	add_child(terrain_mesh)
+	
+	# Layer 3: If Capital province, build raised central citadel dais (+0.16m)
+	if province_data.is_capital:
+		var cap_dais = MeshInstance3D.new()
+		var d_mesh = CylinderMesh.new()
+		d_mesh.top_radius = 0.92
+		d_mesh.bottom_radius = 1.02
+		d_mesh.height = 0.16
+		d_mesh.radial_segments = 7
+		cap_dais.mesh = d_mesh
+		cap_dais.material_override = ModelBuilder.get_mat("rock")
+		cap_dais.position = Vector3(0, 0.18, 0)
+		cap_dais.name = "CapitalDais"
+		add_child(cap_dais)
 	
 	# Territory border ring
 	var border_ring = MeshInstance3D.new()
 	var t_mesh = TorusMesh.new()
-	t_mesh.inner_radius = 1.6
-	t_mesh.outer_radius = 1.72
+	t_mesh.inner_radius = 1.68
+	t_mesh.outer_radius = 1.82
 	t_mesh.rings = 7
 	t_mesh.ring_segments = 4
 	border_ring.mesh = t_mesh
 	border_ring.material_override = _get_faction_mat(province_data.owner)
-	border_ring.position = Vector3(0, 0.01, 0)
+	border_ring.position = Vector3(0, 0.125, 0)
 	border_ring.name = "BorderRing"
 	add_child(border_ring)
 
@@ -94,7 +122,8 @@ func _build_settlement():
 		_:
 			settlement_node = ModelBuilder.create_neutral_outpost()
 	
-	settlement_node.position = Vector3(0, 0, 0)
+	var y_offset = 0.22 if is_cap else 0.08
+	settlement_node.position = Vector3(0, y_offset, 0)
 	settlement_node.name = "Settlement"
 	add_child(settlement_node)
 
@@ -107,7 +136,7 @@ func _build_decorations():
 	# Trees
 	var tree_count = 3
 	if province_id in ["novgorod", "moscow", "kiev"]:
-		tree_count = 6 # Rus' forest province
+		tree_count = 5 # Rus' forest province
 	elif province_id in ["sarai", "kipchak"]:
 		tree_count = 2 # Steppe grasslands
 	elif province_id in ["tabriz", "bukhara"]:
@@ -115,8 +144,8 @@ func _build_decorations():
 		
 	for i in range(tree_count):
 		var angle = rng.randf_range(0.0, TAU)
-		var dist = rng.randf_range(0.8, 1.4)
-		var pos = Vector3(cos(angle) * dist, 0, sin(angle) * dist)
+		var dist = rng.randf_range(0.85, 1.35)
+		var pos = Vector3(cos(angle) * dist, 0.12, sin(angle) * dist)
 		
 		var tree: Node3D
 		if province_id in ["novgorod", "kiev"]:
@@ -133,31 +162,43 @@ func _build_decorations():
 	# Rocks & Pasture
 	if rng.randf() > 0.4:
 		var rocks = ModelBuilder.create_rock_cluster(rng.randf_range(0.7, 1.0))
-		rocks.position = Vector3(rng.randf_range(-1.2, 1.2), 0, rng.randf_range(-1.2, 1.2))
+		rocks.position = Vector3(rng.randf_range(-1.1, 1.1), 0.12, rng.randf_range(-1.1, 1.1))
 		add_child(rocks)
+		
+	# Low-poly Flower patch
+	if rng.randf() > 0.35:
+		var flowers = ModelBuilder.create_flower_patch(rng.randf_range(0.85, 1.1))
+		flowers.position = Vector3(rng.randf_range(-1.0, 1.0), 0.12, rng.randf_range(-1.0, 1.0))
+		add_child(flowers)
+		
+	# Low-poly Cozy Campfire
+	if rng.randf() > 0.45:
+		var fire = ModelBuilder.create_campfire(rng.randf_range(0.8, 1.0))
+		fire.position = Vector3(rng.randf_range(-0.85, 0.85), 0.12, rng.randf_range(-0.85, 0.85))
+		add_child(fire)
 		
 	# Steppe grass tufts & shrubs
 	for j in range(4):
 		var g_angle = rng.randf_range(0.0, TAU)
-		var g_dist = rng.randf_range(0.6, 1.5)
-		var g_pos = Vector3(cos(g_angle) * g_dist, 0, sin(g_angle) * g_dist)
+		var g_dist = rng.randf_range(0.6, 1.4)
+		var g_pos = Vector3(cos(g_angle) * g_dist, 0.12, sin(g_angle) * g_dist)
 		var tuft = ModelBuilder._add_cone(self, 0.12, 0.22, g_pos + Vector3(0, 0.11, 0), ModelBuilder.get_mat("steppe_grass"), 5)
 		tuft.name = "GrassTuft"
 		
 	# Boundary stone marker
-	var stone_pos = Vector3(cos(seed_val) * 1.6, 0.15, sin(seed_val) * 1.6)
+	var stone_pos = Vector3(cos(seed_val) * 1.6, 0.24, sin(seed_val) * 1.6)
 	var b_stone = ModelBuilder._add_cylinder(self, 0.08, 0.14, 0.35, stone_pos, ModelBuilder.get_mat("rock"), 6)
 	b_stone.name = "BoundaryStone"
 		
 	if province_data.owner == "mongol" or province_id in ["kipchak", "sarai"]:
 		var pasture = ModelBuilder.create_pasture_plot(0.8)
-		pasture.position = Vector3(0.9, 0, -0.6)
+		pasture.position = Vector3(0.9, 0.12, -0.6)
 		add_child(pasture)
 
 func _build_army_representation():
 	army_node = Node3D.new()
 	army_node.name = "ArmyNode"
-	army_node.position = Vector3(-0.65, 0, 0.75) # To the front-left of settlement
+	army_node.position = Vector3(-0.65, 0.12, 0.75) # To the front-left of settlement
 	add_child(army_node)
 	_refresh_army_model()
 
@@ -190,7 +231,7 @@ func _refresh_army_model():
 		_:
 			unit_fig = ModelBuilder.create_infantry_unit(f_color)
 			
-	unit_fig.scale = Vector3(0.55, 0.55, 0.55)
+	unit_fig.scale = Vector3(0.70, 0.70, 0.70)
 	army_node.add_child(unit_fig)
 	
 	# Update floating army strength badge

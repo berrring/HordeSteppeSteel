@@ -169,45 +169,84 @@ func _build_3d_battlefield():
 	
 	# Lighting & Atmosphere
 	var sun = DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.94, 0.85)
-	sun.light_energy = 1.35
+	sun.light_color = Color(1.0, 0.95, 0.86)
+	sun.light_energy = 1.45
 	sun.shadow_enabled = true
+	sun.shadow_blur = 1.2
 	sun.rotation_degrees = Vector3(-42, 35, 0)
 	battlefield_root.add_child(sun)
 	
 	var env_node = WorldEnvironment.new()
 	var env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.12, 0.10, 0.08)
+	env.background_color = Color(0.16, 0.19, 0.24) # Deep twilight background for contrast
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.5, 0.45, 0.4)
+	env.ambient_light_color = Color(0.55, 0.50, 0.44)
+	env.ambient_light_energy = 0.95
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.45, 0.38, 0.32)
-	env.fog_density = 0.012
+	env.fog_light_color = Color(0.32, 0.36, 0.44)
+	env.fog_density = 0.008
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.15
+	env.glow_enabled = true
+	env.glow_intensity = 0.35
+	env.glow_bloom = 0.10
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	env_node.environment = env
 	battlefield_root.add_child(env_node)
 	
-	# Arena Ground Plateau
+	# Arena Ground Plateau (Tier 1: Bedrock Cliff Base)
+	var cliff_base = MeshInstance3D.new()
+	var c_cyl = CylinderMesh.new()
+	c_cyl.top_radius = 9.0
+	c_cyl.bottom_radius = 9.5
+	c_cyl.height = 0.45
+	c_cyl.radial_segments = 24
+	cliff_base.mesh = c_cyl
+	cliff_base.material_override = ModelBuilder.get_mat("cliff_bedrock")
+	cliff_base.position = Vector3(0, -0.32, 0)
+	battlefield_root.add_child(cliff_base)
+	
+	# Arena Ground Plateau (Tier 2: Lush Grass Cap)
 	var ground = MeshInstance3D.new()
 	var cyl = CylinderMesh.new()
-	cyl.top_radius = 9.0
-	cyl.bottom_radius = 9.4
-	cyl.height = 0.5
-	cyl.radial_segments = 16
+	cyl.top_radius = 8.8
+	cyl.bottom_radius = 9.0
+	cyl.height = 0.18
+	cyl.radial_segments = 24
 	ground.mesh = cyl
 	ground.material_override = ModelBuilder.get_mat("steppe_grass")
-	ground.position = Vector3(0, -0.25, 0)
+	ground.position = Vector3(0, 0.0, 0)
 	battlefield_root.add_child(ground)
 	
-	# Decorative rocks and trees on periphery
+	# Faction Banners marking both flanks
+	var att_banner = ModelBuilder.create_faction_banner(attacker_faction, 2.2)
+	att_banner.position = Vector3(-6.2, 0.09, 0)
+	att_banner.rotation_degrees = Vector3(0, 45, 0)
+	battlefield_root.add_child(att_banner)
+	
+	var def_banner = ModelBuilder.create_faction_banner(defender_faction, 2.2)
+	def_banner.position = Vector3(6.2, 0.09, 0)
+	def_banner.rotation_degrees = Vector3(0, -45, 0)
+	battlefield_root.add_child(def_banner)
+	
+	# Decorative rocks, flowers, and trees on periphery
+	var fl1 = ModelBuilder.create_flower_patch(1.2)
+	fl1.position = Vector3(-4.0, 0.09, 3.2)
+	battlefield_root.add_child(fl1)
+	
+	var fl2 = ModelBuilder.create_flower_patch(1.2)
+	fl2.position = Vector3(4.0, 0.09, 3.2)
+	battlefield_root.add_child(fl2)
+	
 	var p1 = ModelBuilder.create_pine_tree(1.2)
-	p1.position = Vector3(-5.5, 0, -3.5)
+	p1.position = Vector3(-5.5, 0.09, -3.5)
 	battlefield_root.add_child(p1)
 	var p2 = ModelBuilder.create_birch_tree(1.1)
-	p2.position = Vector3(5.5, 0, -3.2)
+	p2.position = Vector3(5.5, 0.09, -3.2)
 	battlefield_root.add_child(p2)
 	var rock = ModelBuilder.create_rock_cluster(1.1)
-	rock.position = Vector3(0, 0, -4.5)
+	rock.position = Vector3(0, 0.09, -4.5)
 	battlefield_root.add_child(rock)
 	
 	# Spawn Attacker Squad Models (Left side, X: -4.5 to -2.0)

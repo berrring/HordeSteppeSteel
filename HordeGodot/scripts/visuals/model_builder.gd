@@ -5,8 +5,12 @@ const Palette = preload("res://scripts/core/palette.gd")
 
 # Cache materials for high performance and visual consistency
 static var _materials: Dictionary = {}
+static var _initialized: bool = false
 
 static func get_mat(name: String, color: Color = Color.WHITE, roughness: float = 0.8, metallic: float = 0.0) -> StandardMaterial3D:
+	if not _initialized:
+		_initialized = true
+		_init_materials()
 	if not _materials.has(name):
 		var mat = StandardMaterial3D.new()
 		mat.albedo_color = color
@@ -15,59 +19,74 @@ static func get_mat(name: String, color: Color = Color.WHITE, roughness: float =
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 		mat.diffuse_mode = BaseMaterial3D.DIFFUSE_LAMBERT
 		mat.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+		# Gamified miniature rim highlight for crisp low-poly silhouettes
+		mat.rim_enabled = true
+		mat.rim = 0.42
+		mat.rim_tint = 0.35
 		_materials[name] = mat
 	return _materials[name]
 
 static func _init_materials():
 	# Official Canon Five-Color Palette Materials
 	# 1. Steppe Green / Olive (#6B8E23)
-	get_mat("steppe_grass", Palette.STEPPE_GREEN, 0.9, 0.0)
-	get_mat("forest_grass", Palette.STEPPE_GREEN.darkened(0.2), 0.85, 0.0)
-	get_mat("arid_steppe", Color(0.72, 0.65, 0.42), 0.95, 0.0)
-	get_mat("water", Color(0.24, 0.52, 0.72), 0.15, 0.1)
-	get_mat("rock", Color(0.48, 0.48, 0.46), 0.8, 0.05)
-	get_mat("rock_dark", Palette.DEEP_STEEL_BLUE.lightened(0.1), 0.85, 0.05)
-	get_mat("dirt_road", Color(0.55, 0.42, 0.26), 0.95, 0.0)
+	get_mat("steppe_grass", Palette.STEPPE_GREEN, 0.85, 0.0)
+	get_mat("forest_grass", Palette.STEPPE_GREEN.darkened(0.25), 0.8, 0.0)
+	get_mat("arid_steppe", Color(0.74, 0.66, 0.44), 0.9, 0.0)
+	get_mat("water", Color(0.18, 0.58, 0.82), 0.12, 0.15)
+	get_mat("rock", Color(0.52, 0.52, 0.50), 0.75, 0.05)
+	get_mat("rock_dark", Palette.DEEP_STEEL_BLUE.lightened(0.12), 0.8, 0.05)
+	get_mat("cliff_bedrock", Color(0.28, 0.22, 0.17), 0.85, 0.0)
+	get_mat("dirt_road", Color(0.58, 0.44, 0.28), 0.9, 0.0)
 	
 	# 2. Wood Brown (#5C4033)
-	get_mat("wood_dark", Palette.WOOD_BROWN.darkened(0.2), 0.85, 0.0)
-	get_mat("wood_log", Palette.WOOD_BROWN, 0.8, 0.0)
-	get_mat("wood_plank", Palette.WOOD_BROWN.lightened(0.25), 0.75, 0.0)
-	get_mat("straw_thatch", Color(0.78, 0.68, 0.38), 0.9, 0.0)
+	get_mat("wood_dark", Palette.WOOD_BROWN.darkened(0.25), 0.8, 0.0)
+	get_mat("wood_log", Palette.WOOD_BROWN, 0.75, 0.0)
+	get_mat("wood_plank", Palette.WOOD_BROWN.lightened(0.28), 0.7, 0.0)
+	get_mat("bridge_wood", Palette.WOOD_BROWN.lightened(0.15), 0.75, 0.0)
+	get_mat("pedestal_base", Palette.WOOD_BROWN.darkened(0.4), 0.4, 0.25)
+	get_mat("straw_thatch", Color(0.82, 0.72, 0.38), 0.85, 0.0)
 	
 	# 3. Bronze Gold (#DAA520)
-	get_mat("gold_ornament", Palette.BRONZE_GOLD, 0.3, 0.9)
-	get_mat("bronze", Palette.BRONZE_GOLD.darkened(0.1), 0.4, 0.75)
+	get_mat("gold_ornament", Palette.BRONZE_GOLD, 0.25, 0.9)
+	get_mat("bronze", Palette.BRONZE_GOLD.darkened(0.12), 0.35, 0.8)
+	get_mat("flower_yellow", Palette.BRONZE_GOLD, 0.5, 0.0)
 	
 	# 4. Snow White / Light Gray (#E8ECEF)
-	get_mat("snow", Palette.SNOW_WHITE, 0.7, 0.0)
-	get_mat("birch_bark", Palette.SNOW_WHITE.darkened(0.05), 0.6, 0.0)
-	get_mat("yurt_felt", Palette.SNOW_WHITE.darkened(0.08), 0.9, 0.0)
-	get_mat("horse_grey", Palette.SNOW_WHITE.darkened(0.15), 0.75, 0.0)
+	get_mat("snow", Palette.SNOW_WHITE, 0.65, 0.0)
+	get_mat("birch_bark", Palette.SNOW_WHITE.darkened(0.04), 0.55, 0.0)
+	get_mat("yurt_felt", Palette.SNOW_WHITE.darkened(0.06), 0.85, 0.0)
+	get_mat("horse_grey", Palette.SNOW_WHITE.darkened(0.12), 0.7, 0.0)
+	get_mat("flower_white", Palette.SNOW_WHITE, 0.5, 0.0)
 	
 	# 5. Deep Steel Blue (#2B3A4A)
-	get_mat("steel", Color(0.75, 0.76, 0.80), 0.35, 0.85)
-	get_mat("steel_dark", Palette.DEEP_STEEL_BLUE, 0.4, 0.8)
-	get_mat("iron_dark", Palette.DEEP_STEEL_BLUE.darkened(0.2), 0.45, 0.7)
+	get_mat("steel", Color(0.80, 0.82, 0.86), 0.28, 0.9)
+	get_mat("steel_dark", Palette.DEEP_STEEL_BLUE, 0.35, 0.85)
+	get_mat("iron_dark", Palette.DEEP_STEEL_BLUE.darkened(0.25), 0.4, 0.75)
 	
 	# Foliage
-	get_mat("pine_needles", Palette.STEPPE_GREEN.darkened(0.4), 0.7, 0.0)
-	get_mat("oak_leaves", Palette.STEPPE_GREEN.darkened(0.1), 0.75, 0.0)
-	get_mat("birch_leaves", Palette.STEPPE_GREEN.lightened(0.2), 0.7, 0.0)
+	get_mat("pine_needles", Palette.STEPPE_GREEN.darkened(0.45), 0.65, 0.0)
+	get_mat("oak_leaves", Palette.STEPPE_GREEN.darkened(0.12), 0.7, 0.0)
+	get_mat("birch_leaves", Palette.STEPPE_GREEN.lightened(0.22), 0.65, 0.0)
 	
-	# Factions
-	get_mat("yurt_red", Palette.FACTION_RUS, 0.8, 0.0)
-	get_mat("mongol_leather", Palette.WOOD_BROWN.lightened(0.1), 0.7, 0.0)
-	get_mat("horse_brown", Palette.WOOD_BROWN, 0.75, 0.0)
-	get_mat("horse_black", Color(0.15, 0.14, 0.13), 0.7, 0.0)
+	# Factions & Special Effects
+	get_mat("yurt_red", Palette.FACTION_RUS, 0.75, 0.0)
+	get_mat("flower_red", Palette.FACTION_RUS, 0.5, 0.0)
+	get_mat("mongol_leather", Palette.WOOD_BROWN.lightened(0.12), 0.65, 0.0)
+	get_mat("horse_brown", Palette.WOOD_BROWN, 0.7, 0.0)
+	get_mat("horse_black", Color(0.14, 0.13, 0.12), 0.65, 0.0)
 	
-	get_mat("faction_mongol", Palette.FACTION_MONGOL, 0.6, 0.1)
-	get_mat("faction_cuman", Palette.FACTION_CUMAN, 0.6, 0.1)
-	get_mat("faction_rus", Palette.FACTION_RUS, 0.6, 0.1)
-	get_mat("faction_byzantine", Palette.FACTION_BYZANTINE, 0.6, 0.1)
-	get_mat("faction_seljuk", Palette.FACTION_SELJUK, 0.6, 0.1)
-	get_mat("faction_khwarazm", Palette.FACTION_KHWARAZM, 0.6, 0.1)
-	get_mat("faction_neutral", Palette.FACTION_NEUTRAL, 0.7, 0.05)
+	get_mat("faction_mongol", Palette.FACTION_MONGOL, 0.55, 0.1)
+	get_mat("faction_cuman", Palette.FACTION_CUMAN, 0.55, 0.1)
+	get_mat("faction_rus", Palette.FACTION_RUS, 0.55, 0.1)
+	get_mat("faction_byzantine", Palette.FACTION_BYZANTINE, 0.55, 0.1)
+	get_mat("faction_seljuk", Palette.FACTION_SELJUK, 0.55, 0.1)
+	get_mat("faction_khwarazm", Palette.FACTION_KHWARAZM, 0.55, 0.1)
+	get_mat("faction_neutral", Palette.FACTION_NEUTRAL, 0.65, 0.05)
+	
+	var ember = get_mat("ember_glow", Color(1.0, 0.48, 0.12), 0.2, 0.0)
+	ember.emission_enabled = true
+	ember.emission = Color(1.0, 0.52, 0.15)
+	ember.emission_energy_multiplier = 2.4
 
 
 # -------------------------------------------------------------
@@ -209,6 +228,72 @@ static func create_pasture_plot(scale_factor: float = 1.0) -> Node3D:
 	_add_box(root, Vector3(1.1, 0.1, 0.04) * scale_factor, Vector3(0, 0.1, 0.55 * scale_factor), get_mat("wood_plank"))
 	_add_box(root, Vector3(1.1, 0.1, 0.04) * scale_factor, Vector3(0, 0.1, -0.55 * scale_factor), get_mat("wood_plank"))
 	
+	return root
+
+# Charming Low-Poly Flower Patch (Gamified flora)
+static func create_flower_patch(scale_factor: float = 1.0) -> Node3D:
+	_init_materials()
+	var root = Node3D.new()
+	root.name = "FlowerPatch"
+	
+	var mat_stem = get_mat("steppe_grass")
+	var colors = [get_mat("flower_red"), get_mat("flower_yellow"), get_mat("flower_white")]
+	var offsets = [
+		Vector3(0, 0, 0), Vector3(0.12, 0, 0.08), Vector3(-0.10, 0, 0.11),
+		Vector3(-0.08, 0, -0.09), Vector3(0.09, 0, -0.12)
+	]
+	for i in range(offsets.size()):
+		var p = offsets[i] * scale_factor
+		var col = colors[i % colors.size()]
+		# Stem
+		_add_cylinder(root, 0.012 * scale_factor, 0.015 * scale_factor, 0.14 * scale_factor, p + Vector3(0, 0.07 * scale_factor, 0), mat_stem, 4)
+		# Blossom head (faceted low-poly dot)
+		_add_sphere(root, 0.038 * scale_factor, p + Vector3(0, 0.15 * scale_factor, 0), col, 4, 4)
+	return root
+
+# Cozy Steppe Campfire with Glowing Embers
+static func create_campfire(scale_factor: float = 1.0) -> Node3D:
+	_init_materials()
+	var root = Node3D.new()
+	root.name = "Campfire"
+	
+	var mat_rock = get_mat("rock")
+	var mat_log = get_mat("wood_dark")
+	var mat_ember = get_mat("ember_glow")
+	
+	# Circular ring of 6 small stones
+	for i in range(6):
+		var ang = (i / 6.0) * TAU
+		var sp = Vector3(cos(ang) * 0.22, 0.04, sin(ang) * 0.22) * scale_factor
+		_add_box(root, Vector3(0.08, 0.07, 0.08) * scale_factor, sp, mat_rock, Vector3(10, i * 45, -15))
+		
+	# Crossed logs
+	_add_cylinder(root, 0.03 * scale_factor, 0.03 * scale_factor, 0.38 * scale_factor, Vector3(0, 0.06 * scale_factor, 0), mat_log, 4)
+	_add_box(root, Vector3(0.05, 0.05, 0.36) * scale_factor, Vector3(0, 0.07 * scale_factor, 0), mat_log, Vector3(0, 60, 0))
+	_add_box(root, Vector3(0.05, 0.05, 0.36) * scale_factor, Vector3(0, 0.07 * scale_factor, 0), mat_log, Vector3(0, -60, 0))
+	
+	# Glowing ember core
+	_add_box(root, Vector3(0.12, 0.10, 0.12) * scale_factor, Vector3(0, 0.08 * scale_factor, 0), mat_ember)
+	return root
+
+# Stylized Low-Poly Wooden Bridge for river crossings
+static func create_bridge(length: float = 1.4, width: float = 0.6) -> Node3D:
+	_init_materials()
+	var root = Node3D.new()
+	root.name = "RiverBridge"
+	var mat_wood = get_mat("bridge_wood")
+	var mat_dark = get_mat("wood_dark")
+	
+	# Main deck
+	_add_box(root, Vector3(width, 0.08, length), Vector3(0, 0.06, 0), mat_wood)
+	# Side timber railings
+	_add_box(root, Vector3(0.05, 0.16, length), Vector3(width * 0.5 - 0.03, 0.16, 0), mat_dark)
+	_add_box(root, Vector3(0.05, 0.16, length), Vector3(-width * 0.5 + 0.03, 0.16, 0), mat_dark)
+	# Support posts
+	_add_cylinder(root, 0.04, 0.05, 0.35, Vector3(width * 0.5 - 0.03, -0.05, length * 0.35), mat_dark, 4)
+	_add_cylinder(root, 0.04, 0.05, 0.35, Vector3(-width * 0.5 + 0.03, -0.05, length * 0.35), mat_dark, 4)
+	_add_cylinder(root, 0.04, 0.05, 0.35, Vector3(width * 0.5 - 0.03, -0.05, -length * 0.35), mat_dark, 4)
+	_add_cylinder(root, 0.04, 0.05, 0.35, Vector3(-width * 0.5 + 0.03, -0.05, -length * 0.35), mat_dark, 4)
 	return root
 
 
@@ -517,6 +602,14 @@ static func create_faction_banner(faction: String, height: float = 1.5) -> Node3
 # DETAILED 3D UNIT FIGURINES
 # -------------------------------------------------------------
 
+static func _add_figurine_pedestal(parent: Node3D, f_color: Color, radius: float = 0.42):
+	var ped = Node3D.new()
+	ped.name = "Pedestal"
+	_add_cylinder(ped, radius, radius * 1.08, 0.05, Vector3(0, 0.025, 0), get_mat("pedestal_base"), 14)
+	var mat_f = get_mat("ped_f_" + f_color.to_html(false), f_color)
+	_add_cylinder(ped, radius * 0.9, radius * 0.9, 0.015, Vector3(0, 0.055, 0), mat_f, 14)
+	parent.add_child(ped)
+
 # Stylized Horse (reused for cavalry)
 static func _build_horse(parent: Node3D, horse_mat: Material, scale_m: float = 1.0) -> Node3D:
 	var horse = Node3D.new()
@@ -546,6 +639,8 @@ static func create_horse_archer_unit(faction_color: Color = Color(0.9, 0.75, 0.2
 	_init_materials()
 	var root = Node3D.new()
 	root.name = "HorseArcher"
+	
+	_add_figurine_pedestal(root, faction_color, 0.52)
 	
 	var mat_horse = get_mat("horse_brown")
 	var mat_robe = get_mat("faction_mongol")
@@ -577,6 +672,8 @@ static func create_heavy_cavalry_unit(faction_color: Color = Color(0.9, 0.75, 0.
 	var root = Node3D.new()
 	root.name = "HeavyCavalry"
 	
+	_add_figurine_pedestal(root, faction_color, 0.58)
+	
 	var mat_horse = get_mat("horse_black")
 	var mat_armor = get_mat("steel")
 	var mat_trim = get_mat("faction_mongol")
@@ -607,6 +704,8 @@ static func create_infantry_unit(faction_color: Color = Color(0.78, 0.2, 0.2)) -
 	_init_materials()
 	var root = Node3D.new()
 	root.name = "InfantryUnit"
+	
+	_add_figurine_pedestal(root, faction_color, 0.38)
 	
 	var mat_tunic = get_mat("faction_rus")
 	var mat_chainmail = get_mat("steel")
@@ -644,6 +743,8 @@ static func create_spearman_unit(faction_color: Color = Color(0.78, 0.2, 0.2)) -
 	var root = Node3D.new()
 	root.name = "SpearmanUnit"
 	
+	_add_figurine_pedestal(root, faction_color, 0.38)
+	
 	var mat_tunic = get_mat("faction_rus")
 	var mat_armor = get_mat("steel")
 	var mat_wood = get_mat("wood_dark")
@@ -673,6 +774,8 @@ static func create_siege_engine(faction_color: Color = Color(0.5, 0.5, 0.5)) -> 
 	_init_materials()
 	var root = Node3D.new()
 	root.name = "SiegeEngine"
+	
+	_add_figurine_pedestal(root, faction_color, 0.62)
 	
 	var mat_timber = get_mat("wood_log")
 	var mat_iron = get_mat("iron_dark")

@@ -148,23 +148,30 @@ func _ready():
 func _setup_3d_diorama():
 	# Directional Sun (Golden Hour)
 	var sun = DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.90, 0.72)
-	sun.light_energy = 1.4
+	sun.light_color = Color(1.0, 0.94, 0.82)
+	sun.light_energy = 1.45
 	sun.shadow_enabled = true
+	sun.shadow_blur = 1.2
 	sun.rotation_degrees = Vector3(-35, 45, 0)
 	add_child(sun)
 	
-	# World Environment
+	# World Environment with rich contrast & subtle bloom
 	var env_node = WorldEnvironment.new()
 	var env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.12, 0.09, 0.07)
+	env.background_color = Color(0.16, 0.19, 0.24) # Deep twilight atmosphere
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.55, 0.45, 0.38)
-	env.ambient_light_energy = 0.9
+	env.ambient_light_color = Color(0.55, 0.48, 0.42)
+	env.ambient_light_energy = 0.95
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.5, 0.4, 0.3)
-	env.fog_density = 0.015
+	env.fog_light_color = Color(0.32, 0.36, 0.42)
+	env.fog_density = 0.012
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.15
+	env.glow_enabled = true
+	env.glow_intensity = 0.35
+	env.glow_bloom = 0.12
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	env_node.environment = env
 	add_child(env_node)
 	
@@ -185,55 +192,79 @@ func _setup_3d_diorama():
 	diorama_root.name = "Diorama"
 	add_child(diorama_root)
 	
-	# Steppe ground cylinder
+	# Tier 1: Layered earthy cliff bedrock base
+	var base_cliff = MeshInstance3D.new()
+	var cyl_c = CylinderMesh.new()
+	cyl_c.top_radius = 5.2
+	cyl_c.bottom_radius = 5.6
+	cyl_c.height = 0.5
+	cyl_c.radial_segments = 20
+	base_cliff.mesh = cyl_c
+	base_cliff.material_override = ModelBuilder.get_mat("cliff_bedrock")
+	base_cliff.position = Vector3(0, -0.32, 0)
+	diorama_root.add_child(base_cliff)
+	
+	# Tier 2: Lush bevelled grass plate
 	var base_mesh = MeshInstance3D.new()
 	var cyl = CylinderMesh.new()
-	cyl.top_radius = 5.2
-	cyl.bottom_radius = 5.5
-	cyl.height = 0.6
-	cyl.radial_segments = 16
+	cyl.top_radius = 5.0
+	cyl.bottom_radius = 5.2
+	cyl.height = 0.18
+	cyl.radial_segments = 20
 	base_mesh.mesh = cyl
 	base_mesh.material_override = ModelBuilder.get_mat("steppe_grass")
-	base_mesh.position = Vector3(0, -0.3, 0)
+	base_mesh.position = Vector3(0, 0.0, 0)
 	diorama_root.add_child(base_mesh)
 	
-	# Steppe side (Mongol Camp)
+	# Steppe side (Mongol Camp & Yurt)
 	var mongol_camp = ModelBuilder.create_mongol_camp(true)
-	mongol_camp.position = Vector3(-1.8, 0, -0.5)
+	mongol_camp.position = Vector3(-1.8, 0.09, -0.5)
 	mongol_camp.rotation_degrees = Vector3(0, 25, 0)
 	diorama_root.add_child(mongol_camp)
 	
+	var campfire = ModelBuilder.create_campfire(1.2)
+	campfire.position = Vector3(-2.2, 0.09, 0.7)
+	diorama_root.add_child(campfire)
+	
 	var horse_archer = ModelBuilder.create_horse_archer_unit(Color(0.9, 0.75, 0.22))
-	horse_archer.position = Vector3(-0.8, 0, 1.2)
+	horse_archer.position = Vector3(-0.8, 0.09, 1.2)
 	horse_archer.rotation_degrees = Vector3(0, 75, 0)
 	diorama_root.add_child(horse_archer)
 	
 	# Rus' side (Fortress & Warriors)
 	var rus_fort = ModelBuilder.create_rus_fortress(false)
-	rus_fort.position = Vector3(2.0, 0, -0.6)
+	rus_fort.position = Vector3(2.0, 0.09, -0.6)
 	rus_fort.rotation_degrees = Vector3(0, -35, 0)
 	diorama_root.add_child(rus_fort)
 	
 	var druzhina = ModelBuilder.create_infantry_unit(Color(0.78, 0.2, 0.2))
-	druzhina.position = Vector3(0.8, 0, 1.0)
+	druzhina.position = Vector3(0.8, 0.09, 1.0)
 	druzhina.rotation_degrees = Vector3(0, -75, 0)
 	diorama_root.add_child(druzhina)
 	
 	# Environmental dressing
+	var flowers1 = ModelBuilder.create_flower_patch(1.2)
+	flowers1.position = Vector3(-0.4, 0.09, 1.8)
+	diorama_root.add_child(flowers1)
+	
+	var flowers2 = ModelBuilder.create_flower_patch(1.1)
+	flowers2.position = Vector3(1.6, 0.09, 0.8)
+	diorama_root.add_child(flowers2)
+	
 	var p1 = ModelBuilder.create_pine_tree(1.2)
-	p1.position = Vector3(2.8, 0, 1.5)
+	p1.position = Vector3(2.8, 0.09, 1.5)
 	diorama_root.add_child(p1)
 	
 	var p2 = ModelBuilder.create_birch_tree(1.1)
-	p2.position = Vector3(1.2, 0, -2.4)
+	p2.position = Vector3(1.2, 0.09, -2.4)
 	diorama_root.add_child(p2)
 	
 	var p3 = ModelBuilder.create_oak_tree(1.1)
-	p3.position = Vector3(-2.8, 0, 1.8)
+	p3.position = Vector3(-2.8, 0.09, 1.8)
 	diorama_root.add_child(p3)
 	
 	var rocks = ModelBuilder.create_rock_cluster(1.2)
-	rocks.position = Vector3(0, 0, -1.8)
+	rocks.position = Vector3(0, 0.09, -1.8)
 	diorama_root.add_child(rocks)
 
 func _process(delta: float):

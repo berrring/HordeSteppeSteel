@@ -62,30 +62,40 @@ func _ready():
 			camera_rig.focus_on(Vector3(cap_p.x, 0, cap_p.z), 13.0)
 
 func _setup_environment():
-	# Directional Sun
+	# Directional Sun (Crisp Warm Golden-Hour Lighting)
 	sun_light = DirectionalLight3D.new()
 	sun_light.name = "SunLight"
-	sun_light.light_color = Color(1.0, 0.95, 0.86)
-	sun_light.light_energy = 1.3
+	sun_light.light_color = Color(1.0, 0.96, 0.88)
+	sun_light.light_energy = 1.45
 	sun_light.shadow_enabled = true
-	sun_light.rotation_degrees = Vector3(-48, 38, 0)
+	sun_light.shadow_blur = 1.2
+	sun_light.directional_shadow_max_distance = 65.0
+	sun_light.rotation_degrees = Vector3(-45, 42, 0)
 	add_child(sun_light)
 	
-	# World Environment with Atmosphere
+	# World Environment with Gamified Polytopia-inspired Atmosphere
 	env_node = WorldEnvironment.new()
 	env_node.name = "WorldEnvironment"
 	var env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.14, 0.12, 0.10)
+	env.background_color = Color(0.18, 0.22, 0.28) # Deep twilight background for crisp tile contrast
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.48, 0.44, 0.40)
-	env.ambient_light_energy = 0.85
+	env.ambient_light_color = Color(0.52, 0.48, 0.44)
+	env.ambient_light_energy = 0.95
 	
-	# Atmospheric fog for depth
+	# Atmospheric depth fog
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.55, 0.50, 0.45)
-	env.fog_density = 0.008
-	env.fog_aerial_perspective = 0.4
+	env.fog_light_color = Color(0.32, 0.38, 0.45)
+	env.fog_density = 0.007
+	env.fog_aerial_perspective = 0.35
+	
+	# AAA-grade Tonemapping & Subtle Bloom
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.15
+	env.glow_enabled = true
+	env.glow_intensity = 0.35
+	env.glow_bloom = 0.10
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	
 	env_node.environment = env
 	add_child(env_node)
