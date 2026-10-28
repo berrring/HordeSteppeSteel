@@ -1,6 +1,8 @@
 class_name CampaignHUD
 extends CanvasLayer
 
+const Palette = preload("res://scripts/core/palette.gd")
+
 signal end_turn_requested
 signal recruit_requested(unit_type: String)
 signal construct_requested(building_type: String)
@@ -14,6 +16,7 @@ var attack_target_pid: String = ""
 var top_bar: PanelContainer
 var lbl_faction: Label
 var lbl_turn: Label
+var lbl_act: Label
 var lbl_gold: Label
 var lbl_food: Label
 var lbl_wood: Label
@@ -86,8 +89,14 @@ func _create_ui():
 	
 	lbl_turn = Label.new()
 	lbl_turn.text = "Turn 1 / 60"
-	lbl_turn.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+	lbl_turn.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	top_hbox.add_child(lbl_turn)
+	
+	lbl_act = Label.new()
+	lbl_act.text = "⚔ ACT I: SETUP"
+	lbl_act.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
+	lbl_act.add_theme_font_size_override("font_size", 14)
+	top_hbox.add_child(lbl_act)
 	
 	lbl_gold = Label.new()
 	lbl_gold.text = "💰 500g (+150)"
@@ -253,9 +262,11 @@ func _create_ui():
 	construct_container.add_child(lbl_con_header)
 	
 	var buildings = [
-		{"type": "palisade", "label": "Palisade (+10 Def | 100w)", "tip": "Timber stockade rampart.\nGrants +10 defense bonus to defending garrison forces.\nCost: 100 Wood"},
-		{"type": "pasture", "label": "Pasture (+40 Food | 80w)", "tip": "Fenced grazing meadows.\nGenerates +40 Food per turn for unit recruitment.\nCost: 80 Wood"},
-		{"type": "market", "label": "Market (+50 Gold | 120w)", "tip": "Bazaar & trade post.\nYields +50 Gold revenue per turn.\nCost: 120 Wood"},
+		{"type": "town_center", "label": "Town Center (+40g, +20f | 120w)", "tip": "Primary settlement center.\nYields +40 Gold and +20 Food per turn.\nCost: 120 Wood"},
+		{"type": "barracks", "label": "Barracks (+15 Def | 100w)", "tip": "Drill grounds and armory.\nFortifies defenses (+15) and unlocks infantry recruitment.\nCost: 100 Wood"},
+		{"type": "stables", "label": "Stables (+40 Food | 80w)", "tip": "Horse breeding paddocks.\nProduces +40 Food per turn and supports cavalry recruitment.\nCost: 80 Wood"},
+		{"type": "fortification", "label": "Fortifications (+20 Def | 100w)", "tip": "Log ramparts and watchtowers.\nGrants +20 defense bonus to garrisons.\nCost: 100 Wood"},
+		{"type": "palisade", "label": "Palisade (+10 Def | 80w)", "tip": "Timber stockade rampart.\nGrants +10 defense bonus to defending garrison forces.\nCost: 80 Wood"},
 	]
 	for b in buildings:
 		var btn = Button.new()
@@ -520,7 +531,19 @@ func update_resources():
 	lbl_gold.text = "💰 %dg (+%d)" % [player.gold, income.gold]
 	lbl_food.text = "🌾 %df (+%d)" % [player.food, income.food]
 	lbl_wood.text = "🪵 %dw (+%d)" % [player.wood, income.wood]
-	lbl_provinces.text = "🏛 Prov: %d / %d" % [gm.province_count("mongol"), gm.provinces_to_win]
+	var p_count = gm.province_count("mongol")
+	lbl_provinces.text = "🏛 Prov: %d / %d" % [p_count, gm.provinces_to_win]
+	
+	if lbl_act:
+		if p_count >= 7 or gm.turn >= 16:
+			lbl_act.text = "⚔ ACT III: RESOLUTION"
+			lbl_act.add_theme_color_override("font_color", Palette.BRONZE_GOLD.lightened(0.2))
+		elif p_count >= 4 or gm.turn >= 6:
+			lbl_act.text = "⚔ ACT II: CONFRONTATION"
+			lbl_act.add_theme_color_override("font_color", Color(0.95, 0.7, 0.4))
+		else:
+			lbl_act.text = "⚔ ACT I: SETUP"
+			lbl_act.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 
 func select_province(pid: String):
 	selected_pid = pid

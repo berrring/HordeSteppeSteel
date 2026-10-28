@@ -1,6 +1,7 @@
 class_name CampaignController
 extends Node3D
 
+const Palette = preload("res://scripts/core/palette.gd")
 const CampaignMap3D = preload("res://scripts/map/campaign_map_3d.gd")
 const StrategicCamera = preload("res://scripts/camera/strategic_camera.gd")
 const CampaignHUD = preload("res://scripts/ui/campaign_hud.gd")
@@ -10,6 +11,8 @@ const FXManager = preload("res://scripts/visuals/fx_manager.gd")
 var map_3d: CampaignMap3D
 var camera_rig: StrategicCamera
 var hud: CampaignHUD
+var sun_light: DirectionalLight3D
+var env_node: WorldEnvironment
 
 func _ready():
 	_setup_environment()
@@ -52,16 +55,16 @@ func _ready():
 
 func _setup_environment():
 	# Directional Sun
-	var sun = DirectionalLight3D.new()
-	sun.name = "SunLight"
-	sun.light_color = Color(1.0, 0.95, 0.86)
-	sun.light_energy = 1.3
-	sun.shadow_enabled = true
-	sun.rotation_degrees = Vector3(-48, 38, 0)
-	add_child(sun)
+	sun_light = DirectionalLight3D.new()
+	sun_light.name = "SunLight"
+	sun_light.light_color = Color(1.0, 0.95, 0.86)
+	sun_light.light_energy = 1.3
+	sun_light.shadow_enabled = true
+	sun_light.rotation_degrees = Vector3(-48, 38, 0)
+	add_child(sun_light)
 	
 	# World Environment with Atmosphere
-	var env_node = WorldEnvironment.new()
+	env_node = WorldEnvironment.new()
 	env_node.name = "WorldEnvironment"
 	var env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
@@ -78,6 +81,32 @@ func _setup_environment():
 	
 	env_node.environment = env
 	add_child(env_node)
+
+func _update_act_atmosphere(turn: int, p_count: int):
+	if sun_light == null or env_node == null or env_node.environment == null:
+		return
+	var env = env_node.environment
+	if p_count >= 7 or turn >= 16:
+		# Act III: Resolution — Deep dramatic lighting, steel-blue shadows, bronze-gold highlights
+		sun_light.light_color = Palette.BRONZE_GOLD.lightened(0.2)
+		sun_light.light_energy = 1.45
+		env.ambient_light_color = Palette.DEEP_STEEL_BLUE.lightened(0.2)
+		env.fog_light_color = Palette.DEEP_STEEL_BLUE.lightened(0.4)
+		env.fog_density = 0.014
+	elif p_count >= 4 or turn >= 6:
+		# Act II: Confrontation — Late summer into autumn crisp fog
+		sun_light.light_color = Color(0.96, 0.88, 0.76)
+		sun_light.light_energy = 1.25
+		env.ambient_light_color = Color(0.44, 0.45, 0.48)
+		env.fog_light_color = Color(0.60, 0.62, 0.65)
+		env.fog_density = 0.011
+	else:
+		# Act I: Setup — Warm spring steppe sunshine
+		sun_light.light_color = Color(1.0, 0.95, 0.86)
+		sun_light.light_energy = 1.3
+		env.ambient_light_color = Color(0.48, 0.44, 0.40)
+		env.fog_light_color = Color(0.55, 0.50, 0.45)
+		env.fog_density = 0.008
 
 func _on_province_selected(pid: String):
 	if pid == "":
@@ -183,12 +212,49 @@ func _on_construct(building_type: String):
 	var player = gm.get_player_faction()
 	
 	match building_type:
-		"palisade":
+		"town_center":
+			if player.wood < 120:
+				_play_audio("error")
+				hud.log_event("Need 120 wood for Town Center!")
+				return
+			player.wood -= 120
+			p.income_gold += 40
+			p.income_food += 20
+			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+40g +20f", Palette.BRONZE_GOLD)
+			hud.log_event("Developed Town Center in %s (+40 Gold, +20 Food)!" % p.name)
+		"barracks":
 			if player.wood < 100:
 				_play_audio("error")
-				hud.log_event("Need 100 wood for Palisade!")
+				hud.log_event("Need 100 wood for Barracks!")
 				return
 			player.wood -= 100
+			p.defense_bonus += 15
+			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+15 Defense", Color(0.7, 0.85, 1.0))
+			hud.log_event("Constructed Barracks in %s (+15 Defense)!" % p.name)
+		"stables":
+			if player.wood < 80:
+				_play_audio("error")
+				hud.log_event("Need 80 wood for Stables!")
+				return
+			player.wood -= 80
+			p.income_food += 40
+			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+40 Food", Color(0.65, 0.95, 0.55))
+			hud.log_event("Erected Stables in %s (+40 Food/turn)!" % p.name)
+		"fortification":
+			if player.wood < 100:
+				_play_audio("error")
+				hud.log_event("Need 100 wood for Fortifications!")
+				return
+			player.wood -= 100
+			p.defense_bonus += 20
+			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+20 Defense", Color(0.7, 0.85, 1.0))
+			hud.log_event("Built Watchtowers & Fortifications in %s (+20 Defense)!" % p.name)
+		"palisade":
+			if player.wood < 80:
+				_play_audio("error")
+				hud.log_event("Need 80 wood for Palisade!")
+				return
+			player.wood -= 80
 			p.defense_bonus += 10
 			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+10 Defense", Color(0.7, 0.85, 1.0))
 			hud.log_event("Built Palisade in %s (+10 Defense)!" % p.name)
@@ -225,6 +291,7 @@ func _on_end_turn():
 	gm.end_turn()
 	map_3d.refresh_all(gm.provinces)
 	hud.update_resources()
+	_update_act_atmosphere(gm.turn, gm.province_count("mongol"))
 	hud.log_event("Turn %d began. Income collected across your territories." % gm.turn)
 	
 	# Re-select current if still valid

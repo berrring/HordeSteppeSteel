@@ -1,5 +1,7 @@
 extends Node
 
+const Palette = preload("res://scripts/core/palette.gd")
+
 signal turn_ended(turn_number: int)
 signal province_captured(province_id: String, new_owner: String)
 signal faction_defeated(faction_id: String)
@@ -36,23 +38,24 @@ func _build_provinces():
 	provinces.clear()
 	# Each province: {id, name, x, z, owner, income_gold, income_food, income_wood, defense_bonus, neighbors[], is_capital, buildings[]}
 	var raw = [
-		# Player start
+		# Player start (The Golden Horde)
 		{"id": "sarai", "name": "Sarai", "x": 0.0, "z": 0.0, "owner": "mongol", "gold": 150, "food": 100, "wood": 50, "defense": 10, "capital": true},
 		{"id": "kipchak", "name": "Kipchak Steppe", "x": -3.0, "z": -3.0, "owner": "mongol", "gold": 120, "food": 130, "wood": 30, "defense": 0, "capital": false},
-		# Rus faction
+		# Ancient Rus' Principalities
 		{"id": "novgorod", "name": "Novgorod", "x": -4.0, "z": -8.0, "owner": "rus", "gold": 130, "food": 90, "wood": 150, "defense": 15, "capital": true},
 		{"id": "moscow", "name": "Moscow", "x": -1.0, "z": -6.0, "owner": "rus", "gold": 140, "food": 100, "wood": 120, "defense": 10, "capital": false},
 		{"id": "kiev", "name": "Kiev", "x": -3.0, "z": -5.0, "owner": "rus", "gold": 120, "food": 110, "wood": 100, "defense": 5, "capital": false},
-		# Seljuk faction
+		# Seljuk Sultanate
 		{"id": "tabriz", "name": "Tabriz", "x": -2.0, "z": 6.0, "owner": "seljuk", "gold": 120, "food": 80, "wood": 60, "defense": 5, "capital": true},
 		{"id": "samarkand", "name": "Samarkand", "x": 2.0, "z": 3.0, "owner": "seljuk", "gold": 150, "food": 90, "wood": 80, "defense": 10, "capital": false},
-		{"id": "bukhara", "name": "Bukhara", "x": -1.0, "z": 4.5, "owner": "seljuk", "gold": 130, "food": 100, "wood": 70, "defense": 5, "capital": false},
-		# Khwarazmshah faction
+		# Cumans / Kipchaks
+		{"id": "bukhara", "name": "Bukhara", "x": -1.0, "z": 4.5, "owner": "cuman", "gold": 130, "food": 100, "wood": 70, "defense": 5, "capital": true},
+		# Khwarazmshah Dynasty
 		{"id": "karakorum", "name": "Karakorum", "x": 6.0, "z": -3.0, "owner": "khwarazm", "gold": 160, "food": 80, "wood": 40, "defense": 20, "capital": true},
 		{"id": "zhongdu", "name": "Zhongdu", "x": 8.0, "z": -1.0, "owner": "khwarazm", "gold": 180, "food": 120, "wood": 60, "defense": 15, "capital": false},
 		{"id": "shangdu", "name": "Shangdu", "x": 7.0, "z": -5.0, "owner": "khwarazm", "gold": 140, "food": 90, "wood": 50, "defense": 10, "capital": false},
-		# Neutral
-		{"id": "urgench", "name": "Urgench", "x": 3.0, "z": 1.0, "owner": "", "gold": 110, "food": 70, "wood": 60, "defense": 0, "capital": false},
+		# Byzantine Empire Outpost
+		{"id": "urgench", "name": "Urgench", "x": 3.0, "z": 1.0, "owner": "byzantine", "gold": 110, "food": 70, "wood": 60, "defense": 10, "capital": true},
 	]
 	for data in raw:
 		provinces[data.id] = {
@@ -90,10 +93,11 @@ func _build_provinces():
 
 func _build_factions():
 	factions.clear()
+	# 1. Mongol Khanate (The Golden Horde) - Player Faction
 	factions["mongol"] = {
 		"id": "mongol",
 		"name": "Mongol Khanate",
-		"color": Color(0.86, 0.71, 0.24),
+		"color": Palette.FACTION_MONGOL,
 		"is_player": true,
 		"gold": 500, "food": 300, "wood": 200,
 		"is_defeated": false,
@@ -101,10 +105,23 @@ func _build_factions():
 		"bonus_defense": 0.9,
 		"bonus_movement": 1.2,
 	}
+	# 2. Cumans / Kipchaks
+	factions["cuman"] = {
+		"id": "cuman",
+		"name": "Cumans / Kipchaks",
+		"color": Palette.FACTION_CUMAN,
+		"is_player": false,
+		"gold": 350, "food": 320, "wood": 200,
+		"is_defeated": false,
+		"bonus_attack": 1.1,
+		"bonus_defense": 0.95,
+		"bonus_movement": 1.25,
+	}
+	# 3. Ancient Rus' Principalities
 	factions["rus"] = {
 		"id": "rus",
 		"name": "Rus' Principalities",
-		"color": Color(0.63, 0.24, 0.24),
+		"color": Palette.FACTION_RUS,
 		"is_player": false,
 		"gold": 400, "food": 350, "wood": 400,
 		"is_defeated": false,
@@ -112,10 +129,23 @@ func _build_factions():
 		"bonus_defense": 1.3,
 		"bonus_movement": 0.9,
 	}
+	# 4. Byzantine Empire
+	factions["byzantine"] = {
+		"id": "byzantine",
+		"name": "Byzantine Empire",
+		"color": Palette.FACTION_BYZANTINE,
+		"is_player": false,
+		"gold": 450, "food": 250, "wood": 250,
+		"is_defeated": false,
+		"bonus_attack": 1.05,
+		"bonus_defense": 1.2,
+		"bonus_movement": 0.95,
+	}
+	# 5. Seljuk Sultanate
 	factions["seljuk"] = {
 		"id": "seljuk",
 		"name": "Seljuk Sultanate",
-		"color": Color(0.24, 0.24, 0.63),
+		"color": Palette.FACTION_SELJUK,
 		"is_player": false,
 		"gold": 400, "food": 300, "wood": 250,
 		"is_defeated": false,
@@ -123,10 +153,11 @@ func _build_factions():
 		"bonus_defense": 1.0,
 		"bonus_movement": 1.0,
 	}
+	# 6. Khwarazmshah Dynasty
 	factions["khwarazm"] = {
 		"id": "khwarazm",
 		"name": "Khwarazmshah Dynasty",
-		"color": Color(0.24, 0.55, 0.24),
+		"color": Palette.FACTION_KHWARAZM,
 		"is_player": false,
 		"gold": 400, "food": 280, "wood": 300,
 		"is_defeated": false,
@@ -185,6 +216,22 @@ func _setup_starting_armies():
 		"units": [
 			{"type": "heavy_cavalry", "count": 80},
 			{"type": "infantry", "count": 100},
+		]
+	}
+	# Cuman / Kipchak
+	provinces["bukhara"].army = {
+		"faction": "cuman",
+		"units": [
+			{"type": "horse_archer", "count": 90},
+			{"type": "light_cavalry", "count": 60},
+		]
+	}
+	# Byzantine Outpost
+	provinces["urgench"].army = {
+		"faction": "byzantine",
+		"units": [
+			{"type": "spearman", "count": 80},
+			{"type": "heavy_cavalry", "count": 50},
 		]
 	}
 	provinces["zhongdu"].army = {

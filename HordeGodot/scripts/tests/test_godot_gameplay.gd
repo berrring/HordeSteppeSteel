@@ -38,7 +38,8 @@ func _init():
 	# Test 2: Campaign Initialization
 	gm.start_new_campaign()
 	test.call("Campaign initialization creates 12 provinces", gm.provinces.size() == 12)
-	test.call("Campaign initialization creates 4 factions", gm.factions.size() == 4)
+	test.call("Campaign initialization creates 6 official canonical factions", gm.factions.size() == 6)
+	test.call("All 6 canonical factions registered", gm.factions.has("mongol") and gm.factions.has("cuman") and gm.factions.has("rus") and gm.factions.has("byzantine") and gm.factions.has("seljuk") and gm.factions.has("khwarazm"))
 	test.call("Player faction is 'mongol'", gm.factions.has("mongol") and gm.factions["mongol"].is_player)
 	test.call("Player starts with 2 provinces", gm.province_count("mongol") == 2)
 	test.call("Player starts with > 0 gold, food, wood", gm.factions["mongol"].gold > 0 and gm.factions["mongol"].food > 0 and gm.factions["mongol"].wood > 0)
@@ -118,6 +119,14 @@ func _init():
 	var seljuk = ModelBuilder.create_seljuk_settlement(true)
 	test.call("ModelBuilder creates Seljuk Settlement with Minaret & Dome", seljuk != null)
 	seljuk.free()
+	
+	var cuman_camp = ModelBuilder.create_cuman_camp(true)
+	test.call("ModelBuilder creates Cuman / Kipchak Camp with Yurts & Banner", cuman_camp != null and cuman_camp.get_child_count() >= 2)
+	cuman_camp.free()
+	
+	var byz_fort = ModelBuilder.create_byzantine_settlement(true)
+	test.call("ModelBuilder creates Byzantine Outpost with Basilica & Dome", byz_fort != null and byz_fort.get_child_count() >= 3)
+	byz_fort.free()
 	
 	var pine = ModelBuilder.create_pine_tree(1.0)
 	test.call("ModelBuilder creates Steppe Pine Tree with multi-tier foliage", pine != null and pine.get_child_count() >= 4)
@@ -204,9 +213,11 @@ func _init():
 		am._ready()
 	test.call("AudioManager is initialized with audio engine", am != null)
 	if am:
-		test.call("AudioManager generates procedural audio streams", am.streams.size() >= 12)
+		test.call("AudioManager generates procedural audio streams", am.streams.size() >= 14)
 		test.call("AudioStream 'horn' is valid AudioStreamWAV", am.streams.has("horn") and am.streams["horn"] is AudioStreamWAV)
 		test.call("AudioStream 'sword' is valid AudioStreamWAV", am.streams.has("sword") and am.streams["sword"] is AudioStreamWAV)
+		test.call("AudioStream 'victory' is valid AudioStreamWAV", am.streams.has("victory") and am.streams["victory"] is AudioStreamWAV)
+		test.call("AudioStream 'defeat' is valid AudioStreamWAV", am.streams.has("defeat") and am.streams["defeat"] is AudioStreamWAV)
 		am.set_master_volume(0.5)
 		test.call("Master volume setting works", am.master_volume == 0.5)
 		am.set_master_volume(0.85)

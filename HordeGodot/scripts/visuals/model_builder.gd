@@ -1,6 +1,8 @@
 class_name ModelBuilder
 extends RefCounted
 
+const Palette = preload("res://scripts/core/palette.gd")
+
 # Cache materials for high performance and visual consistency
 static var _materials: Dictionary = {}
 
@@ -17,47 +19,55 @@ static func get_mat(name: String, color: Color = Color.WHITE, roughness: float =
 	return _materials[name]
 
 static func _init_materials():
-	# Terrain & Nature
-	get_mat("steppe_grass", Color(0.58, 0.66, 0.32), 0.9, 0.0)
-	get_mat("forest_grass", Color(0.30, 0.48, 0.22), 0.85, 0.0)
+	# Official Canon Five-Color Palette Materials
+	# 1. Steppe Green / Olive (#6B8E23)
+	get_mat("steppe_grass", Palette.STEPPE_GREEN, 0.9, 0.0)
+	get_mat("forest_grass", Palette.STEPPE_GREEN.darkened(0.2), 0.85, 0.0)
 	get_mat("arid_steppe", Color(0.72, 0.65, 0.42), 0.95, 0.0)
 	get_mat("water", Color(0.24, 0.52, 0.72), 0.15, 0.1)
 	get_mat("rock", Color(0.48, 0.48, 0.46), 0.8, 0.05)
-	get_mat("rock_dark", Color(0.34, 0.34, 0.36), 0.85, 0.05)
+	get_mat("rock_dark", Palette.DEEP_STEEL_BLUE.lightened(0.1), 0.85, 0.05)
 	get_mat("dirt_road", Color(0.55, 0.42, 0.26), 0.95, 0.0)
 	
-	# Wood & Timber
-	get_mat("wood_dark", Color(0.35, 0.22, 0.12), 0.85, 0.0)
-	get_mat("wood_log", Color(0.58, 0.42, 0.26), 0.8, 0.0)
-	get_mat("wood_plank", Color(0.68, 0.54, 0.36), 0.75, 0.0)
+	# 2. Wood Brown (#5C4033)
+	get_mat("wood_dark", Palette.WOOD_BROWN.darkened(0.2), 0.85, 0.0)
+	get_mat("wood_log", Palette.WOOD_BROWN, 0.8, 0.0)
+	get_mat("wood_plank", Palette.WOOD_BROWN.lightened(0.25), 0.75, 0.0)
 	get_mat("straw_thatch", Color(0.78, 0.68, 0.38), 0.9, 0.0)
 	
-	# Foliage
-	get_mat("pine_needles", Color(0.18, 0.34, 0.18), 0.7, 0.0)
-	get_mat("oak_leaves", Color(0.36, 0.54, 0.24), 0.75, 0.0)
-	get_mat("birch_leaves", Color(0.52, 0.68, 0.28), 0.7, 0.0)
-	get_mat("birch_bark", Color(0.92, 0.92, 0.90), 0.6, 0.0)
+	# 3. Bronze Gold (#DAA520)
+	get_mat("gold_ornament", Palette.BRONZE_GOLD, 0.3, 0.9)
+	get_mat("bronze", Palette.BRONZE_GOLD.darkened(0.1), 0.4, 0.75)
 	
-	# Mongol / Nomad
-	get_mat("yurt_felt", Color(0.92, 0.89, 0.82), 0.9, 0.0)
-	get_mat("yurt_red", Color(0.75, 0.20, 0.18), 0.8, 0.0)
-	get_mat("mongol_leather", Color(0.48, 0.32, 0.18), 0.7, 0.0)
-	get_mat("horse_brown", Color(0.46, 0.26, 0.15), 0.75, 0.0)
-	get_mat("horse_black", Color(0.18, 0.16, 0.15), 0.7, 0.0)
-	get_mat("horse_grey", Color(0.82, 0.80, 0.78), 0.75, 0.0)
+	# 4. Snow White / Light Gray (#E8ECEF)
+	get_mat("snow", Palette.SNOW_WHITE, 0.7, 0.0)
+	get_mat("birch_bark", Palette.SNOW_WHITE.darkened(0.05), 0.6, 0.0)
+	get_mat("yurt_felt", Palette.SNOW_WHITE.darkened(0.08), 0.9, 0.0)
+	get_mat("horse_grey", Palette.SNOW_WHITE.darkened(0.15), 0.75, 0.0)
 	
-	# Steel, Metal & Armor
+	# 5. Deep Steel Blue (#2B3A4A)
 	get_mat("steel", Color(0.75, 0.76, 0.80), 0.35, 0.85)
-	get_mat("iron_dark", Color(0.35, 0.36, 0.38), 0.45, 0.7)
-	get_mat("gold_ornament", Color(0.88, 0.72, 0.25), 0.3, 0.9)
-	get_mat("bronze", Color(0.78, 0.55, 0.28), 0.4, 0.75)
+	get_mat("steel_dark", Palette.DEEP_STEEL_BLUE, 0.4, 0.8)
+	get_mat("iron_dark", Palette.DEEP_STEEL_BLUE.darkened(0.2), 0.45, 0.7)
 	
-	# Faction Banners & Uniforms
-	get_mat("faction_mongol", Color(0.90, 0.75, 0.22), 0.6, 0.1)
-	get_mat("faction_rus", Color(0.78, 0.20, 0.20), 0.6, 0.1)
-	get_mat("faction_seljuk", Color(0.22, 0.38, 0.78), 0.6, 0.1)
-	get_mat("faction_khwarazm", Color(0.20, 0.65, 0.35), 0.6, 0.1)
-	get_mat("faction_neutral", Color(0.60, 0.58, 0.55), 0.7, 0.05)
+	# Foliage
+	get_mat("pine_needles", Palette.STEPPE_GREEN.darkened(0.4), 0.7, 0.0)
+	get_mat("oak_leaves", Palette.STEPPE_GREEN.darkened(0.1), 0.75, 0.0)
+	get_mat("birch_leaves", Palette.STEPPE_GREEN.lightened(0.2), 0.7, 0.0)
+	
+	# Factions
+	get_mat("yurt_red", Palette.FACTION_RUS, 0.8, 0.0)
+	get_mat("mongol_leather", Palette.WOOD_BROWN.lightened(0.1), 0.7, 0.0)
+	get_mat("horse_brown", Palette.WOOD_BROWN, 0.75, 0.0)
+	get_mat("horse_black", Color(0.15, 0.14, 0.13), 0.7, 0.0)
+	
+	get_mat("faction_mongol", Palette.FACTION_MONGOL, 0.6, 0.1)
+	get_mat("faction_cuman", Palette.FACTION_CUMAN, 0.6, 0.1)
+	get_mat("faction_rus", Palette.FACTION_RUS, 0.6, 0.1)
+	get_mat("faction_byzantine", Palette.FACTION_BYZANTINE, 0.6, 0.1)
+	get_mat("faction_seljuk", Palette.FACTION_SELJUK, 0.6, 0.1)
+	get_mat("faction_khwarazm", Palette.FACTION_KHWARAZM, 0.6, 0.1)
+	get_mat("faction_neutral", Palette.FACTION_NEUTRAL, 0.7, 0.05)
 
 
 # -------------------------------------------------------------
@@ -418,6 +428,50 @@ static func create_neutral_outpost() -> Node3D:
 	return root
 
 
+# Cuman / Kipchak Steppe Camp
+static func create_cuman_camp(is_capital: bool = false) -> Node3D:
+	_init_materials()
+	var root = Node3D.new()
+	root.name = "CumanCamp"
+	
+	# Central Yurt with turquoise trim
+	var yurt1 = create_yurt(0.65 if is_capital else 0.5, is_capital)
+	yurt1.position = Vector3(0, 0, 0)
+	root.add_child(yurt1)
+	
+	if is_capital:
+		var yurt2 = create_yurt(0.42, false)
+		yurt2.position = Vector3(-0.75, 0, 0.4)
+		root.add_child(yurt2)
+		
+	var banner = create_faction_banner("cuman", 1.8 if is_capital else 1.4)
+	banner.position = Vector3(0.55, 0, 0.45)
+	root.add_child(banner)
+	return root
+
+# Byzantine Fortified Settlement / Outpost
+static func create_byzantine_settlement(is_capital: bool = false) -> Node3D:
+	_init_materials()
+	var root = Node3D.new()
+	root.name = "ByzantineSettlement"
+	
+	var mat_stone = get_mat("rock")
+	var mat_roof = get_mat("wood_dark")
+	var mat_dome = get_mat("gold_ornament")
+	
+	# Stone Basilica / Keep
+	var w = 0.8 if is_capital else 0.6
+	_add_box(root, Vector3(w, 0.5, w * 0.8), Vector3(0, 0.25, 0), mat_stone)
+	# Terracotta hip roof
+	_add_cylinder(root, 0.0, w * 0.6, 0.3, Vector3(0, 0.65, 0), mat_roof, 4)
+	if is_capital:
+		_add_sphere(root, 0.2, Vector3(0, 0.85, 0), mat_dome)
+		
+	var banner = create_faction_banner("byzantine", 1.8 if is_capital else 1.4)
+	banner.position = Vector3(0.6, 0, 0.4)
+	root.add_child(banner)
+	return root
+
 # -------------------------------------------------------------
 # FACTION BANNERS
 # -------------------------------------------------------------
@@ -433,8 +487,12 @@ static func create_faction_banner(faction: String, height: float = 1.5) -> Node3
 	match faction:
 		"mongol":
 			mat_flag = get_mat("faction_mongol")
+		"cuman", "kipchak":
+			mat_flag = get_mat("faction_cuman")
 		"rus":
 			mat_flag = get_mat("faction_rus")
+		"byzantine":
+			mat_flag = get_mat("faction_byzantine")
 		"seljuk":
 			mat_flag = get_mat("faction_seljuk")
 		"khwarazm":

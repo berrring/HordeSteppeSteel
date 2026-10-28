@@ -95,6 +95,9 @@ func setup_battle(att_pid: String, def_pid: String, gm_override = null, am_overr
 	_build_3d_battlefield()
 	_update_top_bar()
 	_select_first_available_unit()
+	
+	# Launch automated combat resolution sequence
+	_start_automated_battle_sequence()
 
 func _create_squad_dict(unit_info: Dictionary, f_id: String) -> Dictionary:
 	var utype = unit_info.type
@@ -382,11 +385,11 @@ func _build_ui():
 	act_row.add_theme_constant_override("separation", 12)
 	action_vbox.add_child(act_row)
 	
-	btn_attack = _create_btn("⚔ ATTACK TARGET", Color(0.55, 0.18, 0.12), Color(0.9, 0.35, 0.25))
+	btn_attack = _create_btn("⚔ STRIKE NOW", Color(0.55, 0.18, 0.12), Color(0.9, 0.35, 0.25))
 	btn_attack.pressed.connect(_on_attack_pressed)
 	act_row.add_child(btn_attack)
 	
-	btn_defend = _create_btn("🛡 BRACE / DEFEND (+30% Def)", Color(0.20, 0.26, 0.32), Color(0.45, 0.6, 0.8))
+	btn_defend = _create_btn("🛡 BRACE (+30% Def)", Color(0.20, 0.26, 0.32), Color(0.45, 0.6, 0.8))
 	btn_defend.pressed.connect(_on_defend_pressed)
 	act_row.add_child(btn_defend)
 	
@@ -394,17 +397,17 @@ func _build_ui():
 	row2.add_theme_constant_override("separation", 12)
 	action_vbox.add_child(row2)
 	
-	btn_end_turn = _create_btn("END ROUND", Color(0.35, 0.28, 0.14), Color(0.85, 0.7, 0.3))
-	btn_end_turn.pressed.connect(_on_end_round_pressed)
-	row2.add_child(btn_end_turn)
-	
-	btn_autoresolve = _create_btn("⚡ AUTO-RESOLVE", Color(0.24, 0.20, 0.16), Color(0.65, 0.52, 0.3))
+	btn_autoresolve = _create_btn("⚡ SKIP TO REPORT", Color(0.17, 0.23, 0.29), Color(0.85, 0.65, 0.13))
 	btn_autoresolve.pressed.connect(_on_autoresolve_pressed)
 	row2.add_child(btn_autoresolve)
 	
-	btn_retreat = _create_btn("RETREAT", Color(0.28, 0.12, 0.12), Color(0.6, 0.25, 0.25))
+	btn_retreat = _create_btn("🏳 TACTICAL RETREAT", Color(0.28, 0.12, 0.12), Color(0.6, 0.25, 0.25))
 	btn_retreat.pressed.connect(_on_retreat_pressed)
 	row2.add_child(btn_retreat)
+	
+	btn_end_turn = _create_btn("PAUSE / STEP", Color(0.25, 0.20, 0.15), Color(0.7, 0.6, 0.3))
+	btn_end_turn.pressed.connect(_on_end_round_pressed)
+	row2.add_child(btn_end_turn)
 	
 	# Right: Attack Preview & Feedback
 	var log_vbox = VBoxContainer.new()
@@ -700,6 +703,40 @@ func _start_enemy_turn():
 			_start_next_round()
 	)
 
+func _start_automated_battle_sequence():
+	if _check_battle_over():
+		return
+	is_player_turn = true
+	lbl_round.text = "⚔ AUTOMATED BATTLE — ROUND %d EXCHANGES..." % round_number
+	lbl_round.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	
+	var living_attackers = []
+	for sq in attacker_squads:
+		if sq.count > 0:
+			living_attackers.append(sq)
+			
+	if living_attackers.is_empty():
+		_check_battle_over()
+		return
+		
+	var tw = create_tween()
+	for i in range(living_attackers.size()):
+		var sq = living_attackers[i]
+		tw.tween_interval(0.35)
+		tw.tween_callback(func():
+			if _check_battle_over():
+				return
+			var target = _get_best_target()
+			if not target.is_empty() and sq.count > 0:
+				_execute_attack(sq, target, false)
+		)
+		
+	tw.tween_interval(0.4)
+	tw.tween_callback(func():
+		if not _check_battle_over():
+			_start_enemy_turn()
+	)
+
 func _get_player_target() -> Dictionary:
 	for sq in attacker_squads:
 		if sq.count > 0:
@@ -709,7 +746,7 @@ func _get_player_target() -> Dictionary:
 func _start_next_round():
 	round_number += 1
 	is_player_turn = true
-	lbl_round.text = "⚔ ROUND %d — YOUR COMMAND" % round_number
+	lbl_round.text = "⚔ ROUND %d" % round_number
 	lbl_round.add_theme_color_override("font_color", Color(1.0, 0.95, 0.85))
 	
 	# Reset actions
@@ -721,6 +758,7 @@ func _start_next_round():
 		sq.defending = false
 		
 	_select_first_available_unit()
+	_start_automated_battle_sequence()
 
 func _check_battle_over() -> bool:
 	var att_living = 0
@@ -742,9 +780,7 @@ func _check_battle_over() -> bool:
 	return false
 
 func _on_autoresolve_pressed():
-	if is_busy:
-		return
-	# Rapidly calculate remaining combat
+	# Skip directly to battle report via calculation
 	var max_rounds = 10
 	while max_rounds > 0:
 		max_rounds -= 1
@@ -775,33 +811,55 @@ func _finish_combat(victory: bool, retreated: bool = false):
 	result_modal.visible = true
 	
 	var total_att_lost = 0
+	var att_living = 0
 	for sq in attacker_squads:
 		total_att_lost += (sq.max_count - sq.count)
+		if sq.count > 0:
+			att_living += sq.count
 		
 	var total_def_lost = 0
+	var def_living = 0
 	for sq in defender_squads:
 		total_def_lost += (sq.max_count - sq.count)
+		if sq.count > 0:
+			def_living += sq.count
 		
 	var gm = _get_game_manager()
-	var def_name = gm.provinces[defender_pid].name if gm else "Province"
+	var def_name = gm.provinces[defender_pid].name if gm and gm.provinces.has(defender_pid) else "Territory"
 	
+	var am = _get_audio_manager()
 	if victory:
-		lbl_result_title.text = "👑 DECISIVE VICTORY AT %s!" % def_name.to_upper()
-		lbl_result_title.add_theme_color_override("font_color", Color(1.0, 0.88, 0.35))
-		lbl_result_stats.text = "Enemy forces shattered and province captured!\nOur Losses: %d warriors | Enemy Casualties: %d warriors" % [
-			total_att_lost, total_def_lost
+		if am: am.play_victory()
+		lbl_result_title.text = "👑 VICTORY AT %s!" % def_name.to_upper()
+		lbl_result_title.add_theme_color_override("font_color", Color(0.85, 0.65, 0.13)) # Bronze Gold
+		var narrative = "Strategic Report: Our mobile composite bowmen and shock cavalry breached the defensive lines of %s. Routed enemy forces have capitulated, and the province now flies our banners!" % def_name
+		lbl_result_stats.text = "%s\n\nAttacker (%s): %d casualties | %d surviving\nDefender (%s): %d casualties | %d surviving" % [
+			narrative,
+			attacker_faction.capitalize(), total_att_lost, att_living,
+			defender_faction.capitalize(), total_def_lost, def_living
 		]
-		btn_result_continue.text = "Claim Province for the Golden Horde"
-		_play_sound("horn")
+		btn_result_continue.text = "Claim Province & Return to Campaign"
 	elif retreated:
+		if am: am.play_horn()
 		lbl_result_title.text = "TACTICAL RETREAT"
 		lbl_result_title.add_theme_color_override("font_color", Color(0.9, 0.7, 0.4))
-		lbl_result_stats.text = "Your army withdrew in good order.\nCasualties sustained: %d warriors" % total_att_lost
+		var narrative = "Strategic Report: Orderly withdrawal sounded. Surviving warriors broke engagement and fell back in good order without being encircled."
+		lbl_result_stats.text = "%s\n\nAttacker (%s): %d casualties | %d surviving\nDefender (%s): %d casualties | %d surviving" % [
+			narrative,
+			attacker_faction.capitalize(), total_att_lost, att_living,
+			defender_faction.capitalize(), total_def_lost, def_living
+		]
 		btn_result_continue.text = "Return to Campaign"
 	else:
-		lbl_result_title.text = "DEFEAT — FORCES REPULSED"
+		if am: am.play_defeat()
+		lbl_result_title.text = "DEFEAT — ASSAULT REPULSED"
 		lbl_result_title.add_theme_color_override("font_color", Color(0.95, 0.3, 0.25))
-		lbl_result_stats.text = "The enemy defense proved impenetrable.\nOur Fallen: %d warriors" % total_att_lost
+		var narrative = "Strategic Report: The defensive ramparts and garrison counter-charges blunted our assault on %s. Our surviving forces have fallen back to replenish." % def_name
+		lbl_result_stats.text = "%s\n\nAttacker (%s): %d casualties | %d surviving\nDefender (%s): %d casualties | %d surviving" % [
+			narrative,
+			attacker_faction.capitalize(), total_att_lost, att_living,
+			defender_faction.capitalize(), total_def_lost, def_living
+		]
 		btn_result_continue.text = "Acknowledge Defeat"
 
 func _on_finish_battle_clicked():

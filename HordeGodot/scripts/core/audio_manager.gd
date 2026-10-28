@@ -66,6 +66,8 @@ func _pregenerate_sounds():
 	streams["recruit"] = AudioSynth.make_recruit_clink()
 	streams["wind"] = AudioSynth.make_steppe_wind_loop()
 	streams["music"] = AudioSynth.make_steppe_music_loop()
+	streams["victory"] = AudioSynth.make_victory_fanfare()
+	streams["defeat"] = AudioSynth.make_defeat_drum()
 
 func _process(delta: float):
 	# Decrement cooldowns
@@ -115,6 +117,8 @@ func play_shield(): play_sfx("shield", 0.1, 0.08)
 func play_cavalry(): play_sfx("cavalry", 0.25, 0.06)
 func play_build(): play_sfx("build", 0.2, 0.05)
 func play_recruit(): play_sfx("recruit", 0.15, 0.05)
+func play_victory(): play_sfx("victory", 0.35, 0.02)
+func play_defeat(): play_sfx("defeat", 0.35, 0.02)
 
 func start_ambience():
 	if streams.has("wind") and ambient_player and ambient_player.is_inside_tree():

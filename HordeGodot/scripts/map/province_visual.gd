@@ -81,8 +81,12 @@ func _build_settlement():
 	match owner_f:
 		"mongol":
 			settlement_node = ModelBuilder.create_mongol_camp(is_cap)
+		"cuman", "kipchak":
+			settlement_node = ModelBuilder.create_cuman_camp(is_cap)
 		"rus":
 			settlement_node = ModelBuilder.create_rus_fortress(is_cap)
+		"byzantine":
+			settlement_node = ModelBuilder.create_byzantine_settlement(is_cap)
 		"seljuk":
 			settlement_node = ModelBuilder.create_seljuk_settlement(is_cap)
 		"khwarazm":
@@ -323,8 +327,12 @@ func _get_faction_mat(faction_id: String) -> Material:
 	match faction_id:
 		"mongol":
 			return ModelBuilder.get_mat("faction_mongol")
+		"cuman", "kipchak":
+			return ModelBuilder.get_mat("faction_cuman")
 		"rus":
 			return ModelBuilder.get_mat("faction_rus")
+		"byzantine":
+			return ModelBuilder.get_mat("faction_byzantine")
 		"seljuk":
 			return ModelBuilder.get_mat("faction_seljuk")
 		"khwarazm":

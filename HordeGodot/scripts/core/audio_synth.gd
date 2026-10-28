@@ -268,3 +268,37 @@ static func make_steppe_music_loop() -> AudioStreamWAV:
 		samples[i] = (drone + melody * note_env * 0.25) * 0.6
 		
 	return create_wav(samples, rate, AudioStreamWAV.LOOP_FORWARD)
+
+# 14. Victory Fanfare: Bronze triumph chime
+static func make_victory_fanfare() -> AudioStreamWAV:
+	var rate = 44100
+	var dur = 1.2
+	var count = int(rate * dur)
+	var samples = PackedFloat32Array()
+	samples.resize(count)
+	for i in range(count):
+		var t = float(i) / rate
+		var freq = 293.66 # D4
+		if t >= 0.8: freq = 587.33 # D5
+		elif t >= 0.5: freq = 440.0 # A4
+		elif t >= 0.25: freq = 369.99 # F#4
+		var env = clampf(1.0 - (t / dur), 0.0, 1.0)
+		var sig = sin(TAU * freq * t) + sin(TAU * freq * 2.0 * t) * 0.4
+		samples[i] = sig * env * 0.6
+	return create_wav(samples, rate)
+
+# 15. Defeat Roll: Low solemn percussive fall
+static func make_defeat_drum() -> AudioStreamWAV:
+	var rate = 44100
+	var dur = 1.0
+	var count = int(rate * dur)
+	var samples = PackedFloat32Array()
+	samples.resize(count)
+	for i in range(count):
+		var t = float(i) / rate
+		var freq = 65.0 - t * 25.0
+		var env = exp(-t * 3.5)
+		var sig = sin(TAU * freq * t) + (randf_range(-1.0, 1.0) * 0.2)
+		samples[i] = sig * env * 0.75
+	return create_wav(samples, rate)
+
