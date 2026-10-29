@@ -424,50 +424,22 @@ func resolve_battle(attacker_pid: String, defender_pid: String) -> Dictionary:
 	var def_army = provinces[defender_pid].army
 	var def_bonus = provinces[defender_pid].defense_bonus
 
-	var att_str = get_army_strength(att_army)
-	var def_str = get_army_strength(def_army) + def_bonus * 10
-
-	# Apply faction bonuses
-	var att_faction = factions.get(att_army.faction, {})
-	var att_bonus = att_faction.get("bonus_attack", 1.0)
 	var def_faction_id = provinces[defender_pid].owner
-	var def_faction = factions.get(def_faction_id, {})
-	var def_bonus_mult = def_faction.get("bonus_defense", 1.0) if def_faction else 1.0
-
-	var att_roll = att_str * att_bonus * randf_range(0.7, 1.3)
-	var def_roll = def_str * def_bonus_mult * randf_range(0.7, 1.3)
-
-	var result = {}
-	if att_roll > def_roll:
-		result = {"winner": "attacker", "province": defender_pid}
-		# Transfer province
+	var result: Dictionary = preload("res://scripts/combat/battle_calculator.gd").new().calculate(
+		att_army, def_army, def_bonus,
+		factions.get(att_army.faction, {}).get("bonus_attack", 1.0),
+		factions.get(def_faction_id, {}).get("bonus_defense", 1.0))
+	result["province"] = defender_pid
+	att_army.units = result.surviving_attackers.duplicate(true)
+	if result.attacker_won:
 		provinces[defender_pid].owner = att_army.faction
-		# Reduce attacker casualties
-		for unit in att_army.units:
-			unit.count = max(1, int(unit.count * randf_range(0.7, 0.95)))
-		# Move army
 		provinces[defender_pid].army = att_army
 		provinces[attacker_pid].army = null
-		# Destroy defender army
-		if def_army:
-			for unit in def_army.units:
-				unit.count = max(0, int(unit.count * randf_range(0.1, 0.4)))
-		# Check faction elimination
-		if def_faction_id != "" and province_count(def_faction_id) == 0:
+		if def_faction_id != "" and factions.has(def_faction_id) and province_count(def_faction_id) == 0:
 			factions[def_faction_id].is_defeated = true
 			faction_defeated.emit(def_faction_id)
 		province_captured.emit(defender_pid, att_army.faction)
 	else:
-		result = {"winner": "defender", "province": defender_pid}
-		# Attacker takes heavy casualties
-		for unit in att_army.units:
-			unit.count = max(0, int(unit.count * randf_range(0.4, 0.7)))
-		# Remove dead units
-		var alive_units = []
-		for unit in att_army.units:
-			if unit.count > 0:
-				alive_units.append(unit)
-		att_army.units = alive_units
 		if att_army.units.is_empty():
 			provinces[attacker_pid].army = null
 	return result
