@@ -473,8 +473,14 @@ func _ai_turn(faction_id: String):
 	collect_income(faction_id)
 	# Recruit at capital
 	_ai_recruit(faction_id)
-	# Attack weakest neighbor
-	_ai_attack(faction_id)
+	if current_scenario == "checkpoint_slice":
+		var action: Dictionary = preload("res://scripts/ai/strategic_ai.gd").new().choose_counterattack(
+			current_scenario, current_faction, provinces, factions, faction_id)
+		if not action.is_empty():
+			resolve_battle(action.attacker_pid, action.defender_pid)
+	else:
+		# Preserve the original full campaign strategy.
+		_ai_attack(faction_id)
 
 func _ai_recruit(faction_id: String):
 	var capital_pid = ""
