@@ -14,6 +14,7 @@ var current_state: GameState = GameState.MAIN_MENU
 var turn: int = 1
 var max_turns: int = 60
 var provinces_to_win: int = 10
+var current_scenario: String = "full_campaign"
 
 # Data containers
 var provinces: Dictionary = {}
@@ -26,14 +27,101 @@ var battle_context: Dictionary = {}
 func _ready():
 	pass
 
-func start_new_campaign(chosen_faction: String = "mongol"):
-	# Build campaign data
-	_build_provinces()
-	_build_factions(chosen_faction)
+func start_new_campaign(chosen_faction: String = "mongol", scenario_mode: String = "full_campaign"):
+	current_scenario = scenario_mode
+	if scenario_mode == "checkpoint_slice":
+		_build_checkpoint_slice()
+		_build_checkpoint_factions()
+	else:
+		_build_provinces()
+		_build_factions(chosen_faction)
 	current_faction = chosen_faction
 	turn = 1
 	current_state = GameState.CAMPAIGN
 	state_changed.emit("campaign")
+
+func _build_checkpoint_slice():
+	provinces.clear()
+	var raw = [
+		{"id": "sarai", "name": "Sarai Steppe", "x": -3.0, "z": -0.5, "owner": "mongol", "gold": 150, "food": 100, "wood": 60, "defense": 10, "capital": true},
+		{"id": "crossroads", "name": "Crossroads Hill", "x": 1.0, "z": 0.5, "owner": "neutral", "gold": 60, "food": 60, "wood": 80, "defense": 5, "capital": false},
+		{"id": "sarkel", "name": "Sarkel Redoubt", "x": 4.5, "z": 1.5, "owner": "rus", "gold": 100, "food": 50, "wood": 80, "defense": 20, "capital": true}
+	]
+	for data in raw:
+		var pid: String = data["id"]
+		provinces[pid] = {
+			"id": pid,
+			"name": data["name"],
+			"x": data["x"],
+			"z": data["z"],
+			"owner": data["owner"],
+			"income_gold": data["gold"],
+			"income_food": data["food"],
+			"income_wood": data["wood"],
+			"defense_bonus": data["defense"],
+			"is_capital": data["capital"],
+			"neighbors": [],
+			"buildings": [],
+			"army": null,
+		}
+	var edges = [["sarai", "crossroads"], ["crossroads", "sarkel"]]
+	for e in edges:
+		var p1: String = e[0]
+		var p2: String = e[1]
+		if provinces.has(p1) and provinces.has(p2):
+			if not provinces[p1]["neighbors"].has(p2):
+				provinces[p1]["neighbors"].append(p2)
+			if not provinces[p2]["neighbors"].has(p1):
+				provinces[p2]["neighbors"].append(p1)
+	
+	provinces["sarai"]["army"] = {
+		"faction": "mongol",
+		"units": [{"type": "horse_archer", "count": 100}]
+	}
+	provinces["crossroads"]["army"] = {
+		"faction": "neutral",
+		"units": [{"type": "spearman", "count": 40}]
+	}
+	provinces["sarkel"]["army"] = {
+		"faction": "rus",
+		"units": [{"type": "infantry", "count": 80}]
+	}
+
+func _build_checkpoint_factions():
+	factions.clear()
+	factions["mongol"] = {
+		"id": "mongol",
+		"name": "Mongol Khanate",
+		"color": Palette.BRONZE_GOLD,
+		"is_player": true,
+		"gold": 500, "food": 300, "wood": 200,
+		"is_defeated": false,
+		"bonus_attack": 1.15,
+		"bonus_defense": 0.9,
+		"bonus_movement": 1.2,
+	}
+	factions["rus"] = {
+		"id": "rus",
+		"name": "Rus' Outpost",
+		"color": Palette.DEEP_STEEL_BLUE,
+		"is_player": false,
+		"gold": 300, "food": 200, "wood": 150,
+		"is_defeated": false,
+		"bonus_attack": 1.0,
+		"bonus_defense": 1.25,
+		"bonus_movement": 0.9,
+	}
+	factions["neutral"] = {
+		"id": "neutral",
+		"name": "Local Clans",
+		"color": Palette.SNOW_WHITE,
+		"is_player": false,
+		"gold": 0, "food": 0, "wood": 0,
+		"is_defeated": false,
+		"bonus_attack": 1.0,
+		"bonus_defense": 1.0,
+		"bonus_movement": 1.0,
+	}
 
 func _build_provinces():
 	provinces.clear()
@@ -291,6 +379,21 @@ func province_count(faction_id: String) -> int:
 	return count
 
 func check_victory() -> String:
+	if current_scenario == "checkpoint_slice":
+		if provinces.has("sarkel") and provinces["sarkel"]["owner"] == current_faction:
+			return "win"
+		if provinces.has("sarai") and provinces["sarai"]["owner"] != current_faction:
+			var has_army = false
+			for pid in provinces:
+				if provinces[pid]["army"] != null and provinces[pid]["army"]["faction"] == current_faction:
+					has_army = true
+					break
+			if not has_army:
+				return "lose"
+		if turn > 30:
+			return "lose"
+		return ""
+
 	var player_provinces = province_count(current_faction)
 	if player_provinces >= provinces_to_win:
 		return "win"
@@ -449,6 +552,7 @@ func save_game(path: String = "user://savegame.json") -> bool:
 	var save_data = {
 		"turn": turn,
 		"current_faction": current_faction,
+		"current_scenario": current_scenario,
 		"provinces": provinces,
 		"factions": factions,
 	}
@@ -473,6 +577,7 @@ func load_game(path: String = "user://savegame.json") -> bool:
 	var data = json.data
 	turn = data.get("turn", 1)
 	current_faction = data.get("current_faction", "mongol")
+	current_scenario = data.get("current_scenario", "full_campaign")
 	provinces = data.get("provinces", {})
 	factions = data.get("factions", {})
 	current_state = GameState.CAMPAIGN

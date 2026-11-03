@@ -267,6 +267,21 @@ func _init():
 	test.call("Catalog contains Khwarazm civilization with traits and bonuses", menu.FACTIONS_CATALOG.has("khwarazm") and menu.FACTIONS_CATALOG["khwarazm"].bonuses.size() > 0)
 	menu.free()
 	
+	# Test 19: Checkpoint 4 Scenario Isolation & Rules
+	var gm_slice = load("res://scripts/core/game_manager.gd").new()
+	gm_slice.name = "GameManager_SliceTest"
+	root.add_child(gm_slice)
+	gm_slice.start_new_campaign("mongol", "checkpoint_slice")
+	test.call("Checkpoint slice initializes exactly 3 provinces", gm_slice.provinces.size() == 3)
+	test.call("Checkpoint slice contains sarai, crossroads, sarkel", gm_slice.provinces.has("sarai") and gm_slice.provinces.has("crossroads") and gm_slice.provinces.has("sarkel"))
+	test.call("Checkpoint slice road connects sarai to crossroads", gm_slice.provinces["sarai"].neighbors.has("crossroads"))
+	test.call("Checkpoint slice road connects crossroads to sarkel", gm_slice.provinces["crossroads"].neighbors.has("sarkel"))
+	test.call("Checkpoint slice registers neutral clan faction", gm_slice.factions.has("neutral"))
+	test.call("Checkpoint slice initial state is not won", gm_slice.check_victory() == "")
+	gm_slice.provinces["sarkel"].owner = "mongol"
+	test.call("Capturing sarkel triggers victory in checkpoint slice", gm_slice.check_victory() == "win")
+	gm_slice.free()
+	
 	# Clean up any test instances in root
 	if gm:
 		gm.free()
