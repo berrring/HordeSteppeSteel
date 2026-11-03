@@ -490,11 +490,13 @@ func end_turn():
 
 func _run_ai_turns():
 	for fid in factions:
-		if fid == current_faction or factions[fid].is_defeated:
+		if fid == current_faction or fid == "neutral" or factions[fid].is_defeated:
 			continue
 		_ai_turn(fid)
 
 func _ai_turn(faction_id: String):
+	if faction_id == "neutral":
+		return
 	# Collect income
 	collect_income(faction_id)
 	# Recruit at capital

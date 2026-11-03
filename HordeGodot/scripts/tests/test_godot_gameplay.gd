@@ -282,6 +282,60 @@ func _init():
 	test.call("Capturing sarkel triggers victory in checkpoint slice", gm_slice.check_victory() == "win")
 	gm_slice.free()
 	
+	# Test 20: Scenario Switching, Save Backward Compatibility & Neutral AI Isolation
+	var gm_test = load("res://scripts/core/game_manager.gd").new()
+	gm_test.name = "GameManager_ScenarioTest"
+	root.add_child(gm_test)
+	
+	# Subtest 1: Neutral faction never receives normal AI turn
+	gm_test.start_new_campaign("mongol", "checkpoint_slice")
+	gm_test._ai_turn("neutral")
+	var neutral_gold_after_direct = gm_test.factions["neutral"].gold
+	gm_test.provinces["crossroads"].army = {"faction": "neutral", "units": [{"type": "spearman", "count": 500}]}
+	gm_test.provinces["sarai"].army = {"faction": "mongol", "units": [{"type": "horse_archer", "count": 10}]}
+	gm_test.provinces["sarkel"].army = {"faction": "rus", "units": [{"type": "infantry", "count": 10}]}
+	gm_test._run_ai_turns()
+	var sarai_owner_after = gm_test.provinces["sarai"].owner
+	var neutral_gold_after_all = gm_test.factions["neutral"].gold
+	test.call("Neutral faction never receives normal AI turn", neutral_gold_after_direct == 0 and neutral_gold_after_all == 0 and sarai_owner_after == "mongol")
+	
+	# Subtest 2: Old save files without current_scenario load as full_campaign
+	var legacy_save_path = "user://legacy_save_test.json"
+	var legacy_data = {
+		"turn": 4,
+		"current_faction": "mongol",
+		"provinces": gm_test.provinces,
+		"factions": gm_test.factions
+	}
+	var f = FileAccess.open(legacy_save_path, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(legacy_data))
+		f.close()
+	var loaded_legacy = gm_test.load_game(legacy_save_path)
+	test.call("Old save files without current_scenario load as full_campaign", loaded_legacy and gm_test.current_scenario == "full_campaign")
+	if FileAccess.file_exists(legacy_save_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(legacy_save_path))
+		
+	# Subtest 3: Checkpoint saves preserve checkpoint_slice after loading
+	var slice_save_path = "user://slice_save_test.json"
+	gm_test.start_new_campaign("mongol", "checkpoint_slice")
+	var saved_slice = gm_test.save_game(slice_save_path)
+	var loaded_slice = gm_test.load_game(slice_save_path)
+	test.call("Checkpoint saves preserve checkpoint_slice after loading", saved_slice and loaded_slice and gm_test.current_scenario == "checkpoint_slice" and gm_test.provinces.size() == 3)
+	if FileAccess.file_exists(slice_save_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(slice_save_path))
+		
+	# Subtest 4: Switching from checkpoint_slice to full_campaign restores all 12 provinces and 6 original factions without stale data
+	gm_test.start_new_campaign("mongol", "checkpoint_slice")
+	gm_test.start_new_campaign("mongol", "full_campaign")
+	test.call("Switching checkpoint_slice to full_campaign restores 12 provinces and 6 factions without stale data", gm_test.provinces.size() == 12 and gm_test.factions.size() == 6 and not gm_test.provinces.has("crossroads") and not gm_test.factions.has("neutral"))
+	
+	# Subtest 5: Switching from full_campaign to checkpoint_slice produces exactly 3 provinces and correct checkpoint factions
+	gm_test.start_new_campaign("mongol", "checkpoint_slice")
+	test.call("Switching full_campaign to checkpoint_slice produces exactly 3 provinces and correct factions", gm_test.provinces.size() == 3 and gm_test.factions.size() == 3 and gm_test.factions.has("neutral") and not gm_test.provinces.has("novgorod"))
+	
+	gm_test.free()
+	
 	# Clean up any test instances in root
 	if gm:
 		gm.free()
