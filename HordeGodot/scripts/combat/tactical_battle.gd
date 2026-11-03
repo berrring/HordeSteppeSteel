@@ -59,6 +59,10 @@ var btn_result_continue: Button
 
 var game_manager_ref = null
 var audio_manager_ref = null
+var calculated_result: Dictionary = {}
+var result_submitted: bool = false
+var presentation_tween: Tween
+
 
 func setup_battle(att_pid: String, def_pid: String, gm_override = null, am_override = null):
 	attacker_pid = att_pid
@@ -78,6 +82,13 @@ func setup_battle(att_pid: String, def_pid: String, gm_override = null, am_overr
 	attacker_faction = att_p.army.faction if att_p.army else "mongol"
 	defender_faction = def_p.owner if def_p.owner != "" else "neutral"
 	
+	calculated_result = preload("res://scripts/combat/battle_calculator.gd").new().calculate(
+		att_p.army, def_p.army, def_p.defense_bonus,
+		gm.factions.get(attacker_faction, {}).get("bonus_attack", 1.0),
+		gm.factions.get(defender_faction, {}).get("bonus_defense", 1.0))
+	calculated_result["attacker_pid"] = attacker_pid
+	calculated_result["defender_pid"] = defender_pid
+	result_submitted = false
 	# Build squad data from province armies
 	attacker_squads.clear()
 	defender_squads.clear()
@@ -85,16 +96,11 @@ func setup_battle(att_pid: String, def_pid: String, gm_override = null, am_overr
 	if att_p.army and not att_p.army.units.is_empty():
 		for u in att_p.army.units:
 			attacker_squads.append(_create_squad_dict(u, attacker_faction))
-	else:
-		attacker_squads.append(_create_squad_dict({"type": "horse_archer", "count": 60}, attacker_faction))
-		
+
 	if def_p.army and not def_p.army.units.is_empty():
 		for u in def_p.army.units:
 			defender_squads.append(_create_squad_dict(u, defender_faction))
-	else:
-		# Militia garrison if undefended
-		defender_squads.append(_create_squad_dict({"type": "infantry", "count": 40}, defender_faction))
-		
+
 	_build_ui()
 	_build_3d_battlefield()
 	_update_top_bar()
@@ -747,38 +753,33 @@ func _start_enemy_turn():
 	)
 
 func _start_automated_battle_sequence():
-	if _check_battle_over():
-		return
-	is_player_turn = true
-	lbl_round.text = "⚔ AUTOMATED BATTLE — ROUND %d EXCHANGES..." % round_number
-	lbl_round.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	
-	var living_attackers = []
-	for sq in attacker_squads:
-		if sq.count > 0:
-			living_attackers.append(sq)
-			
-	if living_attackers.is_empty():
-		_check_battle_over()
-		return
-		
-	var tw = create_tween()
-	for i in range(living_attackers.size()):
-		var sq = living_attackers[i]
-		tw.tween_interval(0.35)
-		tw.tween_callback(func():
-			if _check_battle_over():
-				return
-			var target = _get_best_target()
-			if not target.is_empty() and sq.count > 0:
-				_execute_attack(sq, target, false)
-		)
-		
-	tw.tween_interval(0.4)
-	tw.tween_callback(func():
-		if not _check_battle_over():
-			_start_enemy_turn()
-	)
+	# Combat is calculated once; animation only presents those exact casualties.
+	is_busy = true
+	lbl_round.text = "BATTLE REPLAY"
+	log_label.text = "Showing calculated battle casualties."
+	for button in [btn_attack, btn_defend, btn_end_turn]:
+		button.disabled = true
+		button.tooltip_text = "Combat is calculated once; use Auto-resolve to skip the report animation."
+	presentation_tween = create_tween()
+	for step in range(1, 7):
+		presentation_tween.tween_interval(0.35)
+		presentation_tween.tween_callback(_present_casualties.bind(float(step) / 6.0))
+	presentation_tween.tween_callback(func(): _finish_combat(calculated_result.attacker_won))
+
+func _present_casualties(progress: float) -> void:
+	for side in [[attacker_squads, calculated_result.attacker_stack_counts], [defender_squads, calculated_result.defender_stack_counts]]:
+		for i in range(side[0].size()):
+			var squad: Dictionary = side[0][i]
+			var remaining: int = side[1][i]
+			squad.count = int(lerpf(float(squad.max_count), float(remaining), progress))
+			squad.hp = squad.count * squad.base_hp_per_man
+			if squad.get("badge"):
+				squad.badge.text = "⚔ " + str(squad.count)
+			if squad.get("node"):
+				squad.node.visible = squad.count > 0
+	_update_top_bar()
+	_update_unit_card()
+	preview_label.text = "Battle losses follow the campaign calculation."
 
 func _get_player_target() -> Dictionary:
 	for sq in attacker_squads:
@@ -823,42 +824,35 @@ func _check_battle_over() -> bool:
 	return false
 
 func _on_autoresolve_pressed():
-	# Skip directly to battle report via calculation
-	var max_rounds = 10
-	while max_rounds > 0:
-		max_rounds -= 1
-		# Attacker strikes
-		for att in attacker_squads:
-			var target = _get_best_target()
-			if not target.is_empty() and att.count > 0:
-				var dmg = _estimate_damage(att, target)
-				target.count = max(0, target.count - dmg)
-		# Defender strikes
-		for def in defender_squads:
-			var target = _get_player_target()
-			if not target.is_empty() and def.count > 0:
-				var dmg = _estimate_damage(def, target)
-				target.count = max(0, target.count - dmg)
-		if _check_battle_over():
-			return
-	# If time runs out, evaluate based on surviving strength
-	var att_living = 0
-	for sq in attacker_squads:
-		att_living += sq.count
-	var def_living = 0
-	for sq in defender_squads:
-		def_living += sq.count
-	_finish_combat(att_living >= def_living)
+	if result_modal.visible:
+		return
+	if presentation_tween:
+		presentation_tween.kill()
+	_present_casualties(1.0)
+	_finish_combat(calculated_result.attacker_won)
 
 func _on_retreat_pressed():
-	if is_busy:
+	if result_modal.visible:
 		return
+	if presentation_tween:
+		presentation_tween.kill()
+	var gm = _get_game_manager()
+	calculated_result = preload("res://scripts/combat/battle_calculator.gd").new().calculate(
+		gm.provinces[attacker_pid].army, gm.provinces[defender_pid].army,
+		gm.provinces[defender_pid].defense_bonus, 0.0,
+		gm.factions.get(defender_faction, {}).get("bonus_defense", 1.0))
+	calculated_result["attacker_pid"] = attacker_pid
+	calculated_result["defender_pid"] = defender_pid
+	_present_casualties(1.0)
 	_play_sound("horn")
 	_finish_combat(false, true)
 
 func _finish_combat(victory: bool, retreated: bool = false):
 	is_busy = true
 	result_modal.visible = true
+	lbl_round.text = "BATTLE REPORT"
+	btn_retreat.disabled = true
+	btn_autoresolve.disabled = true
 	
 	var total_att_lost = 0
 	var att_living = 0
@@ -890,7 +884,7 @@ func _finish_combat(victory: bool, retreated: bool = false):
 		]
 		btn_result_continue.text = "Claim Province & Return to Campaign"
 	elif retreated:
-		if am: am.play_horn()
+		if am: am.play_war_horn()
 		lbl_result_title.text = "TACTICAL RETREAT"
 		lbl_result_title.add_theme_color_override("font_color", Color(0.9, 0.7, 0.4))
 		var narrative = "Strategic Report: Orderly withdrawal sounded. Surviving warriors broke engagement and fell back in good order without being encircled."
@@ -913,44 +907,14 @@ func _finish_combat(victory: bool, retreated: bool = false):
 		btn_result_continue.text = "Acknowledge Defeat"
 
 func _on_finish_battle_clicked():
-	var victory = (lbl_result_title.text.begins_with("👑"))
+	if result_submitted or calculated_result.is_empty():
+		return
 	var gm = _get_game_manager()
-	
-	var res = {
-		"winner": "attacker" if victory else "defender",
-		"attacker_pid": attacker_pid,
-		"defender_pid": defender_pid,
-	}
-	
-	if gm:
-		# Apply casualty updates back to GameState
-		var att_p = gm.provinces[attacker_pid]
-		var def_p = gm.provinces[defender_pid]
-		
-		if victory:
-			# Province captured
-			def_p.owner = attacker_faction
-			# Transfer surviving units
-			var surv_units = []
-			for sq in attacker_squads:
-				if sq.count > 0:
-					surv_units.append({"type": sq.type, "count": sq.count})
-			def_p.army = {"faction": attacker_faction, "units": surv_units}
-			att_p.army = null
-			def_p.defense_bonus = max(0, def_p.defense_bonus - 5)
-			gm.province_captured.emit(defender_pid, attacker_faction)
-		else:
-			# Attacker takes casualties or wiped
-			var surv_units = []
-			for sq in attacker_squads:
-				if sq.count > 0:
-					surv_units.append({"type": sq.type, "count": sq.count})
-			if surv_units.is_empty():
-				att_p.army = null
-			else:
-				att_p.army.units = surv_units
-				
-	battle_completed.emit(res)
+	if gm == null:
+		return
+	result_submitted = true
+	gm.apply_battle_result(attacker_pid, defender_pid, calculated_result, true)
+	battle_completed.emit(calculated_result.duplicate(true))
 	queue_free()
 
 func _update_top_bar():
