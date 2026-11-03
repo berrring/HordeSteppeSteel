@@ -54,7 +54,7 @@ Bridge spawns centered at `mid = (-1.0, 0.06, 0.0)` crossing the river cleanly.
 
 ## 5. Integration Sequence (Git Rebase Workflow)
 
-1. **Stage 1 (Aziret):** `feature/core-scope-freeze` implements `scenario_mode` in `game_manager.gd`. Test 74/74. Merge to `main`.
+1. **Stage 1 (Aziret):** `aziret` implements `scenario_mode` in `game_manager.gd`. Test 87/87. Merge to `main`.
 2. **Stage 2 (Alen):** `feature/ortho-camera-map` rebases on `main`. Implements `F10` camera toggle and topography elevations. Test 74/74. Merge to `main`.
 3. **Stage 3 (Ayaz):** `feature/economy-hud-theme` rebases on `main`. Implements `EconomyManager` validation and button states. Test 74/74. Merge to `main`.
 4. **Stage 4 (Iskender):** `feature/combat-calculator` rebases on `main`. Implements `BattleCalculator` and `StrategicAI`. Test 74/74. Merge to `main`.
