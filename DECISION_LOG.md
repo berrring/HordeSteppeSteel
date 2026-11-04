@@ -57,3 +57,22 @@
 - **Files Modified:** 
 - **Verification Method:** 
 - **Live Defense Demonstration:** 
+
+## 2026-11-05 — Campaign command and turn contract
+
+- Integrated Alen camera/terrain changes before campaign repairs.
+- Godot remains the implementation; the pasted Unity plan supplies gameplay
+  scope, not a request to migrate engines. Both scenarios remain available.
+- Friendly orders move the entire army to an adjacent province; merging uses
+  the lower remaining budget. The slowest unit determines movement, modified
+  by faction and rounded up. Battles consume remaining movement.
+- GameManager owns recruitment, construction and pending battle results. UI
+  validation is advisory; the transaction validates again. Only one result can
+  commit, with movement reserved before the march animation.
+- AI pays both resource costs, develops income buildings and reinforces borders.
+  Neutral checkpoint factions remain passive. Player income arrives after AI
+  actions at the start of the next season.
+- Save validation is transactional; old full-campaign saves without a scenario
+  field remain supported. Loading also rebuilds the map and restores outcomes.
+- Battle presentation uses one calculated outcome; manual damage buttons are
+  hidden, with skip-report and retreat available during replay.

@@ -46,3 +46,15 @@ This document records all AI-assisted engineering and design work across Team Ar
   - Implemented dynamic HUD button updates (`update_actions_state()`) connected to province selection and resource updates.
   - Verified StyleBoxFlat overrides for normal, hover, pressed, and disabled (0.40 alpha) states matching 5-color palette.
 - **Testing Procedure:** Executed `godot --headless --path HordeGodot -s scripts/tests/test_economy_validation.gd` (20/20 passing) and full regression `scripts/tests/test_godot_gameplay.gd` (86/86 passing).
+
+## 2026-11-05 — Playable campaign repair
+
+Codex inspected and reproduced missing friendly movement, non-adjacent attacks,
+duplicate construction and map/HUD desynchronization. Generated the campaign
+command validation, movement budgets, pending battle transactions, AI resource
+payments/development, save validation, HUD integration and regression suites.
+The main agent reviewed the implementation and an independent bounded reviewer
+identified modal recovery and completed-save issues, which were corrected.
+Verification uses Godot 4.5.2, nine engine suites, multi-turn simulations for all
+six factions and rendered campaign/battle checks. Human playtesting remains
+necessary for subjective balance and pacing.
