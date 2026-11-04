@@ -730,9 +730,6 @@ func _start_enemy_turn():
 	# A single automatic engagement resolves both fronts without pausing for orders.
 	_start_automated_battle_sequence()
 
-func _on_end_round_pressed():
-	_on_autoresolve_pressed()
-
 func _start_automated_battle_sequence():
 	if replay_cancelled or result_modal.visible:
 		return
@@ -763,7 +760,7 @@ func _run_battle_replay() -> void:
 		await _apply_replay_losses(defender_squads, calculated_result.defender_stack_counts, float(round_index) / replay_rounds)
 		_update_top_bar()
 		if round_index < replay_rounds:
-			await create_timer(0.22).timeout
+			await get_tree().create_timer(0.22).timeout
 		if replay_cancelled or not is_inside_tree():
 			return
 		await _play_army_volley(defender_squads, attacker_squads, false)
@@ -773,7 +770,7 @@ func _run_battle_replay() -> void:
 		_update_top_bar()
 		_update_unit_card()
 		if round_index < replay_rounds:
-			await create_timer(0.3).timeout
+			await get_tree().create_timer(0.3).timeout
 	if replay_cancelled or not is_inside_tree():
 		return
 	_finish_combat(calculated_result.attacker_won)
@@ -800,7 +797,7 @@ func _play_army_volley(army: Array[Dictionary], targets: Array[Dictionary], atta
 		if replay_cancelled or not is_inside_tree():
 			return
 		if squad_index < army.size() - 1:
-			await create_timer(0.12).timeout
+			await get_tree().create_timer(0.12).timeout
 
 func _choose_replay_target(attacker: Dictionary, targets: Array[Dictionary]) -> Dictionary:
 	var target: Dictionary = {}
@@ -871,7 +868,7 @@ func _animate_replay_strike(attacker: Dictionary, defender: Dictionary) -> void:
 		await charge.finished
 	if replay_cancelled or not is_inside_tree():
 		return
-	var hit := attacker.node.create_tween()
+	var hit: Tween = attacker.node.create_tween()
 	replay_tweens.append(hit)
 	var defender_origin: Vector3 = defender.node.position
 	hit.tween_property(defender.node, "position", defender_origin + Vector3(0, 0, 0.12), 0.06)
@@ -899,7 +896,7 @@ func _apply_replay_losses(squads: Array[Dictionary], final_counts: Array, progre
 		var color: Color = Palette.BRONZE_GOLD if squad.faction == attacker_faction else Palette.SNOW_WHITE
 		_show_floating_damage(squad.node.position, losses, color)
 		log_label.text = "%s loses %d warriors; %d remain." % [squad.type.replace("_", " ").capitalize(), losses, remaining]
-		await create_timer(0.08).timeout
+		await get_tree().create_timer(0.08).timeout
 
 func _present_casualties(progress: float) -> void:
 	for side in [[attacker_squads, calculated_result.attacker_stack_counts], [defender_squads, calculated_result.defender_stack_counts]]:
