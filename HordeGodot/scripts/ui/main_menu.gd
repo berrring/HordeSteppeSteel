@@ -37,10 +37,8 @@ const FACTIONS_CATALOG = {
 		"quote": "“The greatest joy is to scatter your enemy, to drive him before you, to see his cities reduced to ashes.”",
 		"desc": "Rulers of the vast Eurasian steppe, the Mongol tumens strike with terrifying speed and master composite bowmanship. Their nomadic pastoral economy is optimized for rapid mobile warfare, swift encirclement, and devastating open-field cavalry charges.",
 		"bonuses": [
-			"🏹 +15% Cavalry Attack Power in open terrain",
-			"⚡ +20% Campaign Army Movement Speed",
-			"🐎 Superior Horse Archers with ranged hit-and-run tactics",
-			"⛺ Nomadic yurt settlements with low maintenance overhead"
+			"Attack strength ×1.15; defense strength ×0.90",
+			"Army movement ×1.20 (rounded up; minimum 1)"
 		],
 		"starting_realm": "Controls Sarai (Capital) and Kipchak Steppe with 240+ veteran horse archers and light riders."
 	},
@@ -56,10 +54,8 @@ const FACTIONS_CATALOG = {
 		"quote": "“Whoever comes to us with a sword shall perish by the sword. On that the Russian land stands and will stand.”",
 		"desc": "Hardened by dense boreal forests, frozen rivers, and relentless border skirmishes, the Rus' warriors fight behind formidable wooden kremlins and heavy iron-rimmed shields. Their Druzhina footmen withstand brutal punishment and break enemy assaults.",
 		"bonuses": [
-			"🏰 +30% Defensive Fortification Bonus across all provinces",
-			"🪵 +50% Timber Production (-15% stockade construction costs)",
-			"🪓 Elite Druzhina Axemen & Shielded Spearmen with high physical armor",
-			"❄ Attrition resistance during winter turns and northern campaigns"
+			"Attack strength ×1.00; defense strength ×1.30",
+			"Army movement ×0.90 (rounded up; minimum 1)"
 		],
 		"starting_realm": "Controls Novgorod (Capital), Moscow, and Kiev with sturdy defensive infantry garrisons."
 	},
@@ -75,10 +71,8 @@ const FACTIONS_CATALOG = {
 		"quote": "“Our roof is the open sky and our walls the boundless horizon. No fortress can cage the wind of the steppe.”",
 		"desc": "Fierce pastoral nomads of the Desht-i Qipchaq plains. Masters of lightning raids, feigned retreats, and desert skirmishing. Their lightweight mobile armies cross arid steppes with unmatched agility, overwhelming complacent garrisons.",
 		"bonuses": [
-			"🐎 +25% Movement across Steppes, Arid plains, and River crossings",
-			"💰 -20% Recruitment & Upkeep Cost for Light Cavalry and Raiders",
-			"🌪 Nomadic Swarm doctrine: rapid early-game pressure and outflanking",
-			"🌾 Mobile herds yielding resilient food replenishment on the march"
+			"Attack strength ×1.10; defense strength ×0.95",
+			"Army movement ×1.25 (rounded up; minimum 1)"
 		],
 		"starting_realm": "Controls Bukhara (Capital) with fast Kipchak nomad raiders and skirmish archers."
 	},
@@ -94,10 +88,8 @@ const FACTIONS_CATALOG = {
 		"quote": "“Rome does not bow to the wilderness. Discipline, faith, and iron will endure long after the hordes dissolve.”",
 		"desc": "The Roman legacy endures through disciplined armored cataphracts, professional spear phalanxes, and sophisticated architectural engineering. Their stone basilicas and high walls project civilizing order and immense endurance onto turbulent frontiers.",
 		"bonuses": [
-			"🛡 +20% Physical Armor & Defense for all military units",
-			"🏛 +25% Fortification Resistance and Basilica trade income",
-			"⚔ Armored Varangian Guards & Heavy Cataphract Shock Cavalry",
-			"📜 Administrative resilience: reduced corruption and high province stability"
+			"Attack strength ×1.05; defense strength ×1.20",
+			"Army movement ×0.95 (rounded up; minimum 1)"
 		],
 		"starting_realm": "Controls Urgench (Capital Outpost) with heavily armored cataphracts and phalanx spearmen."
 	},
@@ -113,10 +105,8 @@ const FACTIONS_CATALOG = {
 		"quote": "“Our siege engines shatter the walls of stone; our arrows blot out the sun above the highest citadels.”",
 		"desc": "Fusing Islamic siege engineering with Turkish horse warfare, the Seljuks excel at breaching fortified strongholds and crushing entrenched defenders. Their balanced tumens field deadly traction trebuchets alongside noble Ghilman lancers.",
 		"bonuses": [
-			"🎯 -25% Siege Engine & Trebuchet Construction Cost",
-			"⚔ +10% Combined-Arms Attack and Defense bonus across mixed armies",
-			"☄ Heavy Siege Trebuchets that pulverize high-defense enemy provinces",
-			"🕌 Grand Bazaar trade networks boosting both Gold and Wood revenues"
+			"Attack strength ×1.10; defense strength ×1.00",
+			"Army movement ×1.00 (rounded up; minimum 1)"
 		],
 		"starting_realm": "Controls Tabriz (Capital) and Samarkand with heavy siege engines and veteran footmen."
 	},
@@ -132,10 +122,8 @@ const FACTIONS_CATALOG = {
 		"quote": "“All the wealth of East and West pours into our bazaars. Our steel is tempered in purest gold.”",
 		"desc": "Controlling the richest oasis crossroads of Eurasian commerce, the Khwarazmian Shahs command immense merchant revenues. Their deep treasury enables rapid urban expansion, mercenary mobilization, and elite Royal Lancers.",
 		"bonuses": [
-			"💰 +25% Gold Tax Revenue and Caravan Trade Income in all provinces",
-			"🛡 +10% Heavy Cavalry Attack and Armor rating",
-			"🪙 Economic supremacy: rapid province modernization and high recruitment capacity",
-			"💎 Silk Road Royal Lancers with crushing charge impact"
+			"Attack strength ×1.05; defense strength ×1.10",
+			"Army movement ×1.00 (rounded up; minimum 1)"
 		],
 		"starting_realm": "Controls Karakorum (Capital), Zhongdu, and Shangdu with vast merchant wealth."
 	}
@@ -330,6 +318,15 @@ func _setup_ui():
 	btn_new.pressed.connect(_on_new_campaign_pressed)
 	vbox.add_child(btn_new)
 	
+	var btn_checkpoint = _create_menu_button("CHECKPOINT DEMO · 3 PROVINCES", Palette.DEEP_STEEL_BLUE, Palette.BRONZE_GOLD)
+	btn_checkpoint.name = "CheckpointDemoButton"
+	btn_checkpoint.pressed.connect(func():
+		var gm = _get_game_manager()
+		if gm:
+			gm.start_new_campaign("mongol", "checkpoint_slice")
+		get_tree().change_scene_to_file("res://scenes/campaign/campaign_view.tscn")
+	)
+	vbox.add_child(btn_checkpoint)
 	var btn_continue = _create_menu_button("📜 CONTINUE CAMPAIGN", Color(0.24, 0.20, 0.16), Color(0.65, 0.52, 0.3))
 	btn_continue.pressed.connect(_on_continue_pressed)
 	vbox.add_child(btn_continue)

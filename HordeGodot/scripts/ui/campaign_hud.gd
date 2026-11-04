@@ -20,6 +20,11 @@ signal construct_requested(building_type: String)
 signal attack_requested(attacker_pid: String, defender_pid: String)
 signal return_to_menu_requested
 
+var commands_locked: bool = false
+var btn_confirm_attack: Button
+var _last_modal_visible: bool = false
+var modal_blocker: Control
+
 var selected_pid: String = ""
 var attack_target_pid: String = ""
 
@@ -174,13 +179,13 @@ func _create_ui():
 	top_bar = PanelContainer.new()
 	top_bar.name = "TopBar"
 	top_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top_bar.offset_bottom = 54
+	top_bar.offset_bottom = 90
 	top_bar.add_theme_stylebox_override("panel", _create_panel_stylebox())
 	add_child(top_bar)
 	
-	var top_hbox = HBoxContainer.new()
+	var top_hbox = HFlowContainer.new()
 	top_hbox.alignment = BoxContainer.ALIGNMENT_BEGIN
-	top_hbox.add_theme_constant_override("separation", 24)
+	top_hbox.add_theme_constant_override("h_separation", 12)
 	top_bar.add_child(top_hbox)
 	
 	lbl_faction = Label.new()
@@ -260,10 +265,11 @@ func _create_ui():
 	# Left Selected Province Panel
 	left_panel = PanelContainer.new()
 	left_panel.name = "LeftPanel"
+	left_panel.set_anchors_preset(Control.PRESET_LEFT_WIDE)
 	left_panel.offset_left = 18
-	left_panel.offset_top = 70
+	left_panel.offset_top = 110
 	left_panel.offset_right = 350
-	left_panel.offset_bottom = 690
+	left_panel.offset_bottom = -25
 	left_panel.add_theme_stylebox_override("panel", _create_panel_stylebox())
 	add_child(left_panel)
 	
@@ -313,7 +319,7 @@ func _create_ui():
 	lbl_attack_info.add_theme_color_override("font_color", Color(1.0, 0.45, 0.35))
 	attack_container.add_child(lbl_attack_info)
 	
-	var btn_confirm_attack = Button.new()
+	btn_confirm_attack = Button.new()
 	btn_confirm_attack.text = "⚔ LAUNCH ATTACK"
 	btn_confirm_attack.add_theme_stylebox_override("normal", _create_stylebox(Color(0.55, 0.15, 0.12), Palette.BRONZE_GOLD, 2, 4))
 	btn_confirm_attack.add_theme_stylebox_override("hover", _create_stylebox(Color(0.70, 0.20, 0.15), Palette.BRONZE_GOLD.lightened(0.2), 2, 4))
@@ -428,14 +434,23 @@ func _create_ui():
 	
 	# Event Log Label
 	event_log_label = Label.new()
+	event_log_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	event_log_label.offset_left = 360
-	event_log_label.offset_top = 660
-	event_log_label.offset_right = 1000
-	event_log_label.offset_bottom = 705
+	event_log_label.offset_top = -65
+	event_log_label.offset_right = -260
+	event_log_label.offset_bottom = -15
 	event_log_label.add_theme_color_override("font_color", Palette.SNOW_WHITE)
-	event_log_label.text = "Campaign initialized. Lead the Horde to victory across the steppe!"
+	event_log_label.text = "Select your army, then a neighboring province to march or attack."
+	event_log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(event_log_label)
 	
+	# Transparent input shield prevents clicks reaching the campaign behind dialogs.
+	modal_blocker = Control.new()
+	modal_blocker.name = "ModalInputShield"
+	modal_blocker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal_blocker.mouse_filter = Control.MOUSE_FILTER_STOP
+	modal_blocker.visible = false
+	add_child(modal_blocker)
 	# Modals styled with Deep Steel Blue and Bronze Gold
 	_create_battle_modal()
 	_create_game_over_modal()
@@ -536,7 +551,7 @@ func _create_help_modal():
 	help_modal.add_child(vbox)
 	
 	var title = Label.new()
-	title.text = "PAUSE & STRATEGIC SETTINGS"
+	title.text = "STRATEGIC SETTINGS & CONTROLS"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 20)
 	title.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
@@ -597,7 +612,7 @@ func _create_help_modal():
 	vbox.add_child(hs)
 	
 	var text = Label.new()
-	text.text = "Controls:\n• WASD / Right-Drag: Pan Camera | Scroll: Zoom\n• Left-Click: Select Province or Attack Target\n• ESC: Toggle Pause Menu\n• F10: Switch Camera Projection"
+	text.text = "Controls:\n• WASD / Right-Drag: Pan Camera | Scroll: Zoom\n• Select your army, then a neighbor: March / Merge / Attack\n• Movement refreshes each turn; battles use all remaining movement\n• ESC: Toggle Pause Menu\n• F10: Switch Camera Projection"
 	text.add_theme_font_size_override("font_size", 13)
 	text.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	vbox.add_child(text)
@@ -613,6 +628,7 @@ func _create_help_modal():
 	btn_ok.pressed.connect(func():
 		_play_click()
 		help_modal.visible = false
+		update_actions_state()
 	)
 	btn_hbox.add_child(btn_ok)
 	
@@ -702,9 +718,17 @@ func update_actions_state():
 				base_tip, cost_gold, cost_food, player.get("gold", 0), player.get("food", 0), validation.reason
 			]
 
+	var blocked: bool = commands_locked or gm.current_state != gm.GameState.CAMPAIGN or has_open_modal()
+	btn_end_turn.disabled = blocked
+	for button in construct_buttons.values() + recruit_buttons.values():
+		if blocked:
+			button.disabled = true
+	if attack_target_pid != "":
+		btn_confirm_attack.disabled = blocked or not gm.validate_army_order(selected_pid, attack_target_pid).allowed
+
 func _on_construct_button_clicked(building_type: String):
 	var gm = _get_game_manager()
-	if gm == null or selected_pid == "":
+	if gm == null or selected_pid == "" or commands_locked or has_open_modal():
 		return
 		
 	var p = gm.provinces.get(selected_pid, null)
@@ -720,7 +744,7 @@ func _on_construct_button_clicked(building_type: String):
 
 func _on_recruit_button_clicked(unit_type: String):
 	var gm = _get_game_manager()
-	if gm == null or selected_pid == "":
+	if gm == null or selected_pid == "" or commands_locked or has_open_modal():
 		return
 		
 	var player = gm.get_player_faction()
@@ -737,9 +761,26 @@ func _on_recruit_button_clicked(unit_type: String):
 # -------------------------------------------------------------
 # EVENT HANDLING & CONTROLLER INTEGRATION
 # -------------------------------------------------------------
+func has_open_modal() -> bool:
+	return (is_instance_valid(help_modal) and help_modal.visible) or (is_instance_valid(game_over_modal) and game_over_modal.visible) or (is_instance_valid(battle_modal) and battle_modal.visible)
+
+func _process(_delta: float) -> void:
+	if is_instance_valid(left_panel) and is_instance_valid(top_bar):
+		left_panel.offset_top = maxf(110.0, top_bar.get_global_rect().end.y + 12.0)
+	if is_instance_valid(modal_blocker):
+		var open: bool = has_open_modal()
+		modal_blocker.visible = open
+		if open != _last_modal_visible:
+			_last_modal_visible = open
+			update_actions_state()
+
 func _unhandled_input(event: InputEvent):
+	if commands_locked:
+		return
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		help_modal.visible = not help_modal.visible
+		update_actions_state()
+		get_viewport().set_input_as_handled()
 		_play_click()
 
 func _play_click():
@@ -781,12 +822,12 @@ func update_resources():
 			income.food += gm.provinces[pid].income_food
 			income.wood += gm.provinces[pid].income_wood
 			
-	lbl_turn.text = "Turn %d / %d" % [gm.turn, gm.max_turns]
+	lbl_turn.text = "Turn %d / %d · %s" % [gm.turn, 30 if gm.current_scenario == "checkpoint_slice" else gm.max_turns, gm.season_name()]
 	lbl_gold.text = "💰 %dg (+%d)" % [player.gold, income.gold]
 	lbl_food.text = "🌾 %df (+%d)" % [player.food, income.food]
 	lbl_wood.text = "🪵 %dw (+%d)" % [player.wood, income.wood]
 	var p_count = gm.province_count(p_faction)
-	lbl_provinces.text = "🏛 Prov: %d / %d" % [p_count, gm.provinces_to_win]
+	lbl_provinces.text = "Capture Sarkel" if gm.current_scenario == "checkpoint_slice" else "Provinces: %d / %d" % [p_count, gm.provinces_to_win]
 	
 	if lbl_act:
 		if p_count >= 7 or gm.turn >= 16:
@@ -828,8 +869,11 @@ func select_province(pid: String):
 		owner_name, p.income_gold, p.income_food, p.income_wood, p.defense_bonus
 	]
 	
+	if p.army != null:
+		lbl_province_details.text += "\nMovement: %d / %d (battle uses remaining movement)" % [gm.moves_left(p.army), gm.army_movement(p.army)]
 	# Update army list
 	for child in army_list_container.get_children():
+		army_list_container.remove_child(child)
 		child.queue_free()
 		
 	if p.army != null and not p.army.units.is_empty():
@@ -852,24 +896,35 @@ func select_province(pid: String):
 	update_actions_state()
 
 func prompt_attack(attacker_id: String, defender_id: String):
-	selected_pid = attacker_id
-	attack_target_pid = defender_id
 	var gm = _get_game_manager()
-	if gm == null:
+	if gm == null or commands_locked:
 		return
-	var def_p = gm.provinces[defender_id]
-	var def_f = gm.factions.get(def_p.owner, {})
-	var owner_str = def_f.name if not def_f.is_empty() else "Neutral"
-	
-	lbl_attack_info.text = "TARGET: %s (%s)\nStrength: ~%d" % [
-		def_p.name, owner_str, gm.get_army_strength(def_p.army)
-	]
+	var check: Dictionary = gm.validate_army_order(attacker_id, defender_id)
+	if not check.allowed:
+		log_event(check.reason)
+		return
+	select_province(attacker_id)
+	attack_target_pid = defender_id
+	var p: Dictionary = gm.provinces[defender_id]
+	var friendly: bool = p.owner == gm.current_faction
+	var defense: float = (gm.get_army_strength(p.army) + p.defense_bonus * 10) * gm.factions.get(p.owner, {}).get("bonus_defense", 1.0)
+	lbl_attack_info.text = "MARCH TO: %s\nFriendly army will merge. Costs 1 movement." % p.name if friendly else "ATTACK: %s\nEnemy troops: %d · Fortified strength: %d\nBattle ends this army's movement." % [p.name, gm.get_army_strength(p.army), int(defense)]
+	lbl_attack_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	btn_confirm_attack.text = "MARCH / MERGE" if friendly else "LAUNCH ATTACK"
 	attack_container.visible = true
+	update_actions_state()
 
 func _on_confirm_attack_pressed():
+	var gm = _get_game_manager()
+	if commands_locked or has_open_modal() or gm == null:
+		return
 	if selected_pid != "" and attack_target_pid != "":
-		attack_requested.emit(selected_pid, attack_target_pid)
+		var check: Dictionary = gm.validate_army_order(selected_pid, attack_target_pid)
+		if not check.allowed:
+			log_event(check.reason)
+			return
 		attack_container.visible = false
+		attack_requested.emit(selected_pid, attack_target_pid)
 
 func deselect_province():
 	selected_pid = ""
@@ -898,11 +953,11 @@ func show_battle_result(res: Dictionary, attacker_pid: String, defender_pid: Str
 
 func show_game_over(is_victory: bool):
 	if is_victory:
-		lbl_game_over_title.text = "👑 VICTORY OVER EURASIA!"
+		lbl_game_over_title.text = "CAMPAIGN VICTORY"
 		lbl_game_over_title.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
-		lbl_game_over_details.text = "The Golden Horde reigns supreme from the Danube to the Altai!\nYour rivals have yielded or been driven from history."
+		lbl_game_over_details.text = "Your faction achieved the campaign objective."
 	else:
-		lbl_game_over_title.text = "DEFEAT — THE HORDE COLLAPSES"
+		lbl_game_over_title.text = "CAMPAIGN DEFEAT"
 		lbl_game_over_title.add_theme_color_override("font_color", Color(0.95, 0.3, 0.25))
 		lbl_game_over_details.text = "Your banners lie in the dust, and your people are scattered across the steppe."
 	game_over_modal.visible = true
@@ -912,9 +967,13 @@ func log_event(msg: String):
 		event_log_label.text = msg
 
 func _on_help_pressed():
+	if commands_locked:
+		return
 	help_modal.visible = not help_modal.visible
 
 func _on_save_pressed():
+	if commands_locked or has_open_modal():
+		return
 	var gm = _get_game_manager()
 	if gm:
 		if gm.save_game():
@@ -923,6 +982,8 @@ func _on_save_pressed():
 			log_event("Failed to save campaign.")
 
 func _on_load_pressed():
+	if commands_locked or has_open_modal():
+		return
 	var gm = _get_game_manager()
 	if gm:
 		if gm.load_game():

@@ -82,12 +82,13 @@ func setup_battle(att_pid: String, def_pid: String, gm_override = null, am_overr
 	attacker_faction = att_p.army.faction if att_p.army else "mongol"
 	defender_faction = def_p.owner if def_p.owner != "" else "neutral"
 	
-	calculated_result = preload("res://scripts/combat/battle_calculator.gd").new().calculate(
-		att_p.army, def_p.army, def_p.defense_bonus,
-		gm.factions.get(attacker_faction, {}).get("bonus_attack", 1.0),
-		gm.factions.get(defender_faction, {}).get("bonus_defense", 1.0))
-	calculated_result["attacker_pid"] = attacker_pid
-	calculated_result["defender_pid"] = defender_pid
+	if gm.current_state == gm.GameState.BATTLE and not gm.battle_context.is_empty() and gm.battle_context.result.attacker_pid == att_pid and gm.battle_context.result.defender_pid == def_pid:
+		calculated_result = gm.battle_context.result.duplicate(true)
+	else:
+		calculated_result = gm.begin_battle(att_pid, def_pid)
+	if calculated_result.is_empty():
+		queue_free()
+		return
 	result_submitted = false
 	# Build squad data from province armies
 	attacker_squads.clear()
@@ -293,7 +294,7 @@ func _build_3d_battlefield():
 		sq["badge"] = badge
 
 func _instance_unit_3d(utype: String, faction: String) -> Node3D:
-	var f_col = Color(0.9, 0.75, 0.22) if faction == "mongol" else Color(0.78, 0.2, 0.2)
+	var f_col: Color = Palette.get_faction_color(faction)
 	match utype:
 		"horse_archer", "light_cavalry":
 			return ModelBuilder.create_horse_archer_unit(f_col)
@@ -759,6 +760,7 @@ func _start_automated_battle_sequence():
 	log_label.text = "Showing calculated battle casualties."
 	for button in [btn_attack, btn_defend, btn_end_turn]:
 		button.disabled = true
+		button.visible = false
 		button.tooltip_text = "Combat is calculated once; use Auto-resolve to skip the report animation."
 	presentation_tween = create_tween()
 	for step in range(1, 7):
@@ -771,12 +773,23 @@ func _present_casualties(progress: float) -> void:
 		for i in range(side[0].size()):
 			var squad: Dictionary = side[0][i]
 			var remaining: int = side[1][i]
+			var previous_count: int = squad.count
 			squad.count = int(lerpf(float(squad.max_count), float(remaining), progress))
 			squad.hp = squad.count * squad.base_hp_per_man
 			if squad.get("badge"):
 				squad.badge.text = "⚔ " + str(squad.count)
 			if squad.get("node"):
 				squad.node.visible = squad.count > 0
+				if previous_count > squad.count:
+					_play_sound("arrow" if squad.type in ["horse_archer", "siege"] else "sword")
+					_show_floating_damage(squad.node.position, previous_count - squad.count, Palette.BRONZE_GOLD)
+				if squad.count > 0 and progress < 1.0:
+					if not squad.has("replay_origin"):
+						squad["replay_origin"] = squad.node.position
+					var motion: Tween = squad.node.create_tween()
+					var offset: Vector3 = Vector3(0.12 if squad.faction == attacker_faction else -0.12, 0, 0)
+					motion.tween_property(squad.node, "position", squad.replay_origin + offset, 0.12)
+					motion.tween_property(squad.node, "position", squad.replay_origin, 0.12)
 	_update_top_bar()
 	_update_unit_card()
 	preview_label.text = "Battle losses follow the campaign calculation."
@@ -837,12 +850,7 @@ func _on_retreat_pressed():
 	if presentation_tween:
 		presentation_tween.kill()
 	var gm = _get_game_manager()
-	calculated_result = preload("res://scripts/combat/battle_calculator.gd").new().calculate(
-		gm.provinces[attacker_pid].army, gm.provinces[defender_pid].army,
-		gm.provinces[defender_pid].defense_bonus, 0.0,
-		gm.factions.get(defender_faction, {}).get("bonus_defense", 1.0))
-	calculated_result["attacker_pid"] = attacker_pid
-	calculated_result["defender_pid"] = defender_pid
+	calculated_result = gm.retreat_battle()
 	_present_casualties(1.0)
 	_play_sound("horn")
 	_finish_combat(false, true)
@@ -912,8 +920,9 @@ func _on_finish_battle_clicked():
 	var gm = _get_game_manager()
 	if gm == null:
 		return
+	if not gm.apply_battle_result(attacker_pid, defender_pid, calculated_result, true):
+		return
 	result_submitted = true
-	gm.apply_battle_result(attacker_pid, defender_pid, calculated_result, true)
 	battle_completed.emit(calculated_result.duplicate(true))
 	queue_free()
 

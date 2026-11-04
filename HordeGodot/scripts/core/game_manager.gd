@@ -1,5 +1,8 @@
 extends Node
 
+const Economy = preload("res://scripts/core/economy_manager.gd")
+const Calculator = preload("res://scripts/combat/battle_calculator.gd")
+
 const Palette = preload("res://scripts/core/palette.gd")
 
 signal turn_ended(turn_number: int)
@@ -7,6 +10,11 @@ signal province_captured(province_id: String, new_owner: String)
 signal faction_defeated(faction_id: String)
 signal game_over(is_victory: bool)
 signal state_changed(new_state: String)
+signal campaign_loaded
+
+var _processing_turn: bool = false
+var _battle_serial: int = 0
+var campaign_log: Array[String] = []
 
 enum GameState { MAIN_MENU, CAMPAIGN, BATTLE, VICTORY, DEFEAT }
 
@@ -28,6 +36,15 @@ func _ready():
 	pass
 
 func start_new_campaign(chosen_faction: String = "mongol", scenario_mode: String = "full_campaign"):
+	if scenario_mode not in ["full_campaign", "checkpoint_slice"]:
+		scenario_mode = "full_campaign"
+	if scenario_mode == "checkpoint_slice":
+		chosen_faction = "mongol"
+	elif chosen_faction not in ["mongol", "cuman", "rus", "byzantine", "seljuk", "khwarazm"]:
+		chosen_faction = "mongol"
+	battle_context.clear()
+	campaign_log.clear()
+	_processing_turn = false
 	current_scenario = scenario_mode
 	if scenario_mode == "checkpoint_slice":
 		_build_checkpoint_slice()
@@ -37,6 +54,8 @@ func start_new_campaign(chosen_faction: String = "mongol", scenario_mode: String
 		_build_factions(chosen_faction)
 	current_faction = chosen_faction
 	turn = 1
+	for fid in factions:
+		_reset_movement(fid)
 	current_state = GameState.CAMPAIGN
 	state_changed.emit("campaign")
 
@@ -364,12 +383,117 @@ func collect_income(faction_id: String) -> Dictionary:
 	return income
 
 func get_army_strength(army: Variant) -> int:
+	return Calculator.new().army_strength(army)
+
+func army_movement(army: Variant) -> int:
+	if get_army_strength(army) <= 0:
+		return 0
+	var slowest: int = 3
+	for unit in army.units:
+		slowest = mini(slowest, int(get_unit_stats(unit.type).get("movement", 1)))
+	return maxi(1, int(ceil(slowest * factions.get(army.faction, {}).get("bonus_movement", 1.0))))
+
+func moves_left(army: Variant) -> int:
 	if army == null:
 		return 0
-	var total = 0
-	for unit in army.units:
-		total += unit.count
-	return total
+	return int(army.get("moves_left", army_movement(army)))
+
+func _reset_movement(fid: String) -> void:
+	for p in provinces.values():
+		if p.army != null and p.army.faction == fid:
+			p.army["moves_left"] = army_movement(p.army)
+
+func season_name() -> String:
+	return ["Spring", "Summer", "Autumn", "Winter"][(turn - 1) % 4]
+
+func can_manage_province(pid: String) -> bool:
+	return current_state == GameState.CAMPAIGN and not _processing_turn and provinces.has(pid) and provinces[pid].owner == current_faction
+
+func validate_army_order(source: String, target: String, actor: String = "") -> Dictionary:
+	var fid: String = current_faction if actor == "" else actor
+	if current_state != GameState.CAMPAIGN or (_processing_turn and fid == current_faction):
+		return {"allowed": false, "reason": "Finish the current action first."}
+	if not provinces.has(source) or not provinces.has(target) or source == target:
+		return {"allowed": false, "reason": "Choose two different provinces."}
+	var p: Dictionary = provinces[source]
+	if p.owner != fid or p.army == null or p.army.faction != fid or get_army_strength(p.army) == 0:
+		return {"allowed": false, "reason": "Select a province containing your army."}
+	if target not in p.neighbors:
+		return {"allowed": false, "reason": "Armies can only enter connected neighboring provinces."}
+	if moves_left(p.army) <= 0:
+		return {"allowed": false, "reason": "This army has no movement left. End the turn."}
+	return {"allowed": true, "reason": "March" if provinces[target].owner == fid else "Attack"}
+
+func move_army(source: String, target: String, actor: String = "") -> Dictionary:
+	var validation: Dictionary = validate_army_order(source, target, actor)
+	if not validation.allowed:
+		return validation
+	var army: Dictionary = provinces[source].army
+	if provinces[target].owner != army.faction:
+		return {"allowed": false, "reason": "Enemy territory requires a battle."}
+	var remaining: int = moves_left(army) - 1
+	var destination = provinces[target].army
+	if destination == null:
+		provinces[target].army = army
+	else:
+		remaining = mini(remaining, moves_left(destination))
+		for incoming in army.units:
+			var merged: bool = false
+			for unit in destination.units:
+				if unit.type == incoming.type:
+					unit.count += incoming.count
+					merged = true
+					break
+			if not merged:
+				destination.units.append(incoming.duplicate(true))
+	provinces[target].army["moves_left"] = mini(remaining, army_movement(provinces[target].army))
+	provinces[source].army = null
+	return {"allowed": true, "reason": "Army arrived.", "destination": target}
+
+func construct_building(pid: String, building_type: String, actor: String = "") -> Dictionary:
+	var fid: String = current_faction if actor == "" else actor
+	if not provinces.has(pid) or provinces[pid].owner != fid or not factions.has(fid) or current_state != GameState.CAMPAIGN or (fid == current_faction and _processing_turn):
+		return {"allowed": false, "reason": "Select your province during your turn."}
+	var p: Dictionary = provinces[pid]
+	var faction: Dictionary = factions[fid]
+	var check: Dictionary = Economy.can_build(p, faction, building_type)
+	if not check.allowed:
+		return check
+	var data: Dictionary = Economy.get_building_data(building_type)
+	faction.wood -= data.wood_cost
+	p.income_gold += data.income_gold
+	p.income_food += data.income_food
+	p.defense_bonus += data.defense_bonus
+	p.buildings.append(building_type)
+	return {"allowed": true, "reason": "%s completed in %s." % [data.name, p.name]}
+
+func recruit_units(pid: String, unit_type: String, actor: String = "") -> Dictionary:
+	var fid: String = current_faction if actor == "" else actor
+	if not provinces.has(pid) or provinces[pid].owner != fid or not factions.has(fid) or current_state != GameState.CAMPAIGN:
+		return {"allowed": false, "reason": "Recruit only in your own provinces."}
+	if fid == current_faction and _processing_turn:
+		return {"allowed": false, "reason": "Wait for your turn."}
+	var stats: Dictionary = get_unit_stats(unit_type)
+	if stats.is_empty():
+		return {"allowed": false, "reason": "Unknown unit type."}
+	var check: Dictionary = Economy.can_recruit(factions[fid], stats)
+	if not check.allowed:
+		return check
+	factions[fid].gold -= stats.cost_gold
+	factions[fid].food -= stats.cost_food
+	var p: Dictionary = provinces[pid]
+	if p.army == null:
+		p.army = {"faction": fid, "units": [], "moves_left": 0}
+	var found: bool = false
+	for unit in p.army.units:
+		if unit.type == unit_type:
+			unit.count += 50
+			found = true
+			break
+	if not found:
+		p.army.units.append({"type": unit_type, "count": 50})
+	p.army["moves_left"] = mini(moves_left(p.army), army_movement(p.army))
+	return {"allowed": true, "reason": "Recruited 50 %s in %s." % [unit_type.replace("_", " "), p.name]}
 
 func province_count(faction_id: String) -> int:
 	var count = 0
@@ -419,55 +543,91 @@ func check_victory() -> String:
 		return "lose"
 	return ""
 
-func resolve_battle(attacker_pid: String, defender_pid: String) -> Dictionary:
-	var att_army = provinces[attacker_pid].army
-	var def_army = provinces[defender_pid].army
-	var def_bonus = provinces[defender_pid].defense_bonus
+func begin_battle(attacker_pid: String, defender_pid: String, actor: String = "") -> Dictionary:
+	var validation: Dictionary = validate_army_order(attacker_pid, defender_pid, actor)
+	if not validation.allowed:
+		return {}
+	var att: Dictionary = provinces[attacker_pid]
+	var defender: Dictionary = provinces[defender_pid]
+	if defender.owner == att.owner:
+		return {}
+	_battle_serial += 1
+	var result: Dictionary = Calculator.new().calculate(att.army, defender.army, defender.defense_bonus,
+		factions.get(att.owner, {}).get("bonus_attack", 1.0), factions.get(defender.owner, {}).get("bonus_defense", 1.0))
+	result.merge({"attacker_pid": attacker_pid, "defender_pid": defender_pid, "province": defender_pid, "battle_id": _battle_serial})
+	battle_context = {"result": result.duplicate(true), "attacker": att.army.duplicate(true), "defender": defender.army.duplicate(true) if defender.army != null else null}
+	att.army["moves_left"] = 0
+	current_state = GameState.BATTLE
+	return result
 
-	var def_faction_id = provinces[defender_pid].owner
-	var result: Dictionary = preload("res://scripts/combat/battle_calculator.gd").new().calculate(
-		att_army, def_army, def_bonus,
-		factions.get(att_army.faction, {}).get("bonus_attack", 1.0),
-		factions.get(def_faction_id, {}).get("bonus_defense", 1.0))
-	result["province"] = defender_pid
+func retreat_battle() -> Dictionary:
+	if current_state != GameState.BATTLE or battle_context.is_empty():
+		return {}
+	var previous: Dictionary = battle_context.result
+	var p: Dictionary = provinces[previous.defender_pid]
+	var result: Dictionary = Calculator.new().calculate(battle_context.attacker, battle_context.defender,
+		p.defense_bonus, 0.0, factions.get(p.owner, {}).get("bonus_defense", 1.0))
+	for key in ["attacker_pid", "defender_pid", "province", "battle_id"]:
+		result[key] = previous[key]
+	battle_context.result = result.duplicate(true)
+	return result
+
+func resolve_battle(attacker_pid: String, defender_pid: String) -> Dictionary:
+	if not provinces.has(attacker_pid):
+		return {}
+	var result: Dictionary = begin_battle(attacker_pid, defender_pid, provinces[attacker_pid].owner)
+	if result.is_empty():
+		return {}
 	apply_battle_result(attacker_pid, defender_pid, result)
 	return result
 
-# Shared state transaction for campaign resolution and the tactical presentation.
-func apply_battle_result(attacker_pid: String, defender_pid: String, result: Dictionary, tactical_capture: bool = false) -> void:
-	var att_army = provinces[attacker_pid].army
-	var def_faction_id: String = provinces[defender_pid].owner
+# Only the active calculation may commit, exactly once.
+func apply_battle_result(attacker_pid: String, defender_pid: String, result: Dictionary, tactical_capture: bool = false) -> bool:
+	if current_state != GameState.BATTLE or battle_context.is_empty() or result != battle_context.result:
+		return false
+	if result.attacker_pid != attacker_pid or result.defender_pid != defender_pid:
+		return false
+	var att_army: Dictionary = battle_context.attacker.duplicate(true)
+	var defender_owner: String = provinces[defender_pid].owner
 	att_army.units = result.surviving_attackers.duplicate(true)
+	att_army["moves_left"] = 0
 	if result.attacker_won:
-		if tactical_capture:
-			provinces[defender_pid].defense_bonus = maxi(0, provinces[defender_pid].defense_bonus - 5)
 		provinces[defender_pid].owner = att_army.faction
 		provinces[defender_pid].army = att_army
 		provinces[attacker_pid].army = null
-		if def_faction_id != "" and factions.has(def_faction_id) and province_count(def_faction_id) == 0:
-			factions[def_faction_id].is_defeated = true
-			faction_defeated.emit(def_faction_id)
-		province_captured.emit(defender_pid, att_army.faction)
+		if tactical_capture:
+			provinces[defender_pid].defense_bonus = maxi(0, provinces[defender_pid].defense_bonus - 5)
 	else:
-		if att_army.units.is_empty():
-			provinces[attacker_pid].army = null
+		provinces[attacker_pid].army = att_army if not att_army.units.is_empty() else null
+	battle_context.clear()
+	current_state = GameState.CAMPAIGN
+	if result.attacker_won:
+		if factions.has(defender_owner) and province_count(defender_owner) == 0:
+			factions[defender_owner].is_defeated = true
+			faction_defeated.emit(defender_owner)
+		province_captured.emit(defender_pid, att_army.faction)
+	return true
 
+func evaluate_campaign() -> String:
+	var outcome: String = check_victory()
+	if outcome != "" and current_state not in [GameState.VICTORY, GameState.DEFEAT]:
+		current_state = GameState.VICTORY if outcome == "win" else GameState.DEFEAT
+		game_over.emit(outcome == "win")
+	return outcome
 
-func end_turn():
-	# Player income
-	collect_income(current_faction)
-	turn += 1
-	# AI turns
+func end_turn() -> bool:
+	if current_state != GameState.CAMPAIGN or _processing_turn:
+		return false
+	_processing_turn = true
+	campaign_log.clear()
 	_run_ai_turns()
-	# Check conditions
-	var result = check_victory()
-	if result == "win":
-		current_state = GameState.VICTORY
-		game_over.emit(true)
-	elif result == "lose":
-		current_state = GameState.DEFEAT
-		game_over.emit(false)
+	turn += 1
+	_reset_movement(current_faction)
+	collect_income(current_faction)
+	_processing_turn = false
+	evaluate_campaign()
 	turn_ended.emit(turn)
+	return true
 
 func _run_ai_turns():
 	for fid in factions:
@@ -476,69 +636,91 @@ func _run_ai_turns():
 		_ai_turn(fid)
 
 func _ai_turn(faction_id: String):
-	if faction_id == "neutral":
+	if faction_id == "neutral" or not factions.has(faction_id) or factions[faction_id].is_defeated:
 		return
+	_reset_movement(faction_id)
 	# Collect income
 	collect_income(faction_id)
 	# Recruit at capital
 	_ai_recruit(faction_id)
+	_ai_develop(faction_id)
 	if current_scenario == "checkpoint_slice":
 		var action: Dictionary = preload("res://scripts/ai/strategic_ai.gd").new().choose_counterattack(
 			current_scenario, current_faction, provinces, factions, faction_id)
 		if not action.is_empty():
-			resolve_battle(action.attacker_pid, action.defender_pid)
+			var result: Dictionary = resolve_battle(action.attacker_pid, action.defender_pid)
+			if not result.is_empty():
+				campaign_log.append("Rus counterattacked Crossroads: %s." % ("captured" if result.attacker_won else "repulsed"))
 	else:
 		# Preserve the original full campaign strategy.
 		_ai_attack(faction_id)
 
 func _ai_recruit(faction_id: String):
-	var capital_pid = ""
+	var capital_pid: String = ""
 	for pid in provinces:
-		if provinces[pid].owner == faction_id and provinces[pid].is_capital:
-			capital_pid = pid
-			break
-	if capital_pid == "":
-		# Use any owned province
-		for pid in provinces:
-			if provinces[pid].owner == faction_id:
+		if provinces[pid].owner == faction_id:
+			if capital_pid == "" or provinces[pid].is_capital:
 				capital_pid = pid
-				break
-	if capital_pid == "" or factions[faction_id].gold < 100:
-		return
-	var army = provinces[capital_pid].army
-	if army == null:
-		army = {"faction": faction_id, "units": []}
-		provinces[capital_pid].army = army
-	var unit_type = "infantry" if factions[faction_id].gold < 250 else "horse_archer"
-	var stats = get_unit_stats(unit_type)
-	if factions[faction_id].gold >= stats.cost_gold:
-		army.units.append({"type": unit_type, "count": 50})
-		factions[faction_id].gold -= stats.cost_gold
+	if capital_pid != "":
+		var unit_type: String = "horse_archer" if factions[faction_id].gold >= 250 else "infantry"
+		recruit_units(capital_pid, unit_type, faction_id)
+
+func _ai_develop(fid: String) -> void:
+	for pid in provinces:
+		if provinces[pid].owner != fid:
+			continue
+		for building in ["market", "town_center"]:
+			if building not in provinces[pid].buildings:
+				if construct_building(pid, building, fid).allowed:
+					return
 
 func _ai_attack(faction_id: String):
-	var owned = []
-	for pid in provinces:
-		if provinces[pid].owner == faction_id and provinces[pid].army != null:
-			owned.append(pid)
-	for src_pid in owned:
-		var army = provinces[src_pid].army
-		if army == null or army.units.is_empty():
+	# Snapshot sources so an army cannot attack repeatedly after capturing territory.
+	var sources: Array = provinces.keys()
+	for source in sources:
+		var p: Dictionary = provinces[source]
+		if p.owner != faction_id or p.army == null or moves_left(p.army) <= 0:
 			continue
-		var our_str = get_army_strength(army)
-		var best_target = ""
-		var best_str = 999999
-		for neighbor_pid in provinces[src_pid].neighbors:
-			if provinces[neighbor_pid].owner == faction_id:
+		var attack: float = get_army_strength(p.army) * factions[faction_id].get("bonus_attack", 1.0)
+		var target: String = ""
+		var weakest: float = INF
+		for neighbor in p.neighbors:
+			var enemy: Dictionary = provinces[neighbor]
+			if enemy.owner == faction_id:
 				continue
-			var their_str = get_army_strength(provinces[neighbor_pid].army)
-			if their_str < best_str:
-				best_str = their_str
-				best_target = neighbor_pid
-		if best_target != "" and our_str > best_str:
-			resolve_battle(src_pid, best_target)
+			var strength: float = (get_army_strength(enemy.army) + enemy.defense_bonus * Calculator.FORTIFICATION_SCALE) * factions.get(enemy.owner, {}).get("bonus_defense", 1.0)
+			if strength < weakest:
+				weakest = strength
+				target = neighbor
+		if target != "" and attack > weakest:
+			var result: Dictionary = resolve_battle(source, target)
+			if not result.is_empty():
+				campaign_log.append("%s attacked %s: %s." % [factions[faction_id].name, provinces[target].name, "captured" if result.attacker_won else "repulsed"])
+		elif target == "":
+			# Interior hosts march toward the nearest border through friendly land.
+			var next_step: String = _route_to_front(source, faction_id)
+			if next_step != "":
+				move_army(source, next_step, faction_id)
+
+func _route_to_front(source: String, fid: String) -> String:
+	var queue: Array = [source]
+	var first_step: Dictionary = {source: ""}
+	while not queue.is_empty():
+		var pid: String = queue.pop_front()
+		for neighbor in provinces[pid].neighbors:
+			if provinces[neighbor].owner != fid:
+				if pid != source:
+					return first_step[pid]
+			elif not first_step.has(neighbor):
+				first_step[neighbor] = neighbor if pid == source else first_step[pid]
+				queue.append(neighbor)
+	return ""
 
 func save_game(path: String = "user://savegame.json") -> bool:
+	if current_state == GameState.BATTLE or _processing_turn:
+		return false
 	var save_data = {
+		"version": 2,
 		"turn": turn,
 		"current_faction": current_faction,
 		"current_scenario": current_scenario,
@@ -553,6 +735,8 @@ func save_game(path: String = "user://savegame.json") -> bool:
 	return true
 
 func load_game(path: String = "user://savegame.json") -> bool:
+	if current_state == GameState.BATTLE or _processing_turn:
+		return false
 	if not FileAccess.file_exists(path):
 		return false
 	var file = FileAccess.open(path, FileAccess.READ)
@@ -563,12 +747,98 @@ func load_game(path: String = "user://savegame.json") -> bool:
 	file.close()
 	if err != OK:
 		return false
-	var data = json.data
-	turn = data.get("turn", 1)
-	current_faction = data.get("current_faction", "mongol")
+	var data: Variant = json.data
+	if not _valid_save(data):
+		return false
+	# Commit only after the entire save has passed validation.
+	turn = int(data.get("turn", 1))
+	current_faction = data.current_faction
 	current_scenario = data.get("current_scenario", "full_campaign")
-	provinces = data.get("provinces", {})
-	factions = data.get("factions", {})
+	provinces = data.provinces
+	factions = data.factions
+	for fid in factions:
+		factions[fid]["color"] = Palette.get_faction_color(fid)
+		factions[fid]["is_player"] = fid == current_faction
+	for p in provinces.values():
+		if p.army != null:
+			p.army["moves_left"] = clampi(int(p.army.get("moves_left", army_movement(p.army))), 0, army_movement(p.army))
+	battle_context.clear()
+	campaign_log.clear()
 	current_state = GameState.CAMPAIGN
 	state_changed.emit("campaign")
+	campaign_loaded.emit()
+	evaluate_campaign()
 	return true
+
+func _valid_save(data: Variant) -> bool:
+	if not data is Dictionary or not data.get("provinces") is Dictionary or not data.get("factions") is Dictionary:
+		return false
+	if not data.get("turn", 1) is float and not data.get("turn", 1) is int:
+		return false
+	if data.get("turn", 1) < 1 or not data.factions.has(data.get("current_faction", "")):
+		return false
+	var scenario: String = str(data.get("current_scenario", "full_campaign"))
+	if scenario not in ["full_campaign", "checkpoint_slice"] or data.provinces.size() != (3 if scenario == "checkpoint_slice" else 12):
+		return false
+	var required_provinces: Array = ["sarai", "crossroads", "sarkel"] if scenario == "checkpoint_slice" else ["sarai", "kipchak", "kiev", "moscow", "novgorod", "tabriz", "samarkand", "bukhara", "karakorum", "zhongdu", "shangdu", "urgench"]
+	var required_factions: Array = ["mongol", "rus", "neutral"] if scenario == "checkpoint_slice" else ["mongol", "rus", "cuman", "byzantine", "seljuk", "khwarazm"]
+	for pid in required_provinces:
+		if not data.provinces.has(pid):
+			return false
+	if data.factions.size() != required_factions.size():
+		return false
+	for fid in required_factions:
+		if not data.factions.has(fid):
+			return false
+	if scenario == "checkpoint_slice" and data.current_faction != "mongol":
+		return false
+	for fid in data.factions:
+		var f: Variant = data.factions[fid]
+		if not f is Dictionary:
+			return false
+		for key in ["id", "name", "is_defeated", "gold", "food", "wood"]:
+			if not f.has(key):
+				return false
+		if f.id != fid or not f.name is String or not f.is_defeated is bool:
+			return false
+		for key in ["bonus_attack", "bonus_defense", "bonus_movement"]:
+			if f.has(key) and (not _nonnegative_number(f[key]) or f[key] <= 0):
+				return false
+		for key in ["gold", "food", "wood"]:
+			if not _nonnegative_number(f[key]):
+				return false
+	for pid in data.provinces:
+		var p: Variant = data.provinces[pid]
+		if not p is Dictionary:
+			return false
+		for key in ["id", "name", "x", "z", "owner", "neighbors", "army", "buildings", "defense_bonus", "is_capital", "income_gold", "income_food", "income_wood"]:
+			if not p.has(key):
+				return false
+		if p.id != pid or not p.name is String or not p.is_capital is bool:
+			return false
+		if not p.neighbors is Array or not p.buildings is Array or not data.factions.has(p.owner):
+			return false
+		for key in ["defense_bonus", "income_gold", "income_food", "income_wood"]:
+			if not _nonnegative_number(p[key]):
+				return false
+		if not (p.x is float or p.x is int) or not (p.z is float or p.z is int):
+			return false
+		if not is_finite(float(p.x)) or not is_finite(float(p.z)):
+			return false
+		for neighbor in p.neighbors:
+			if not data.provinces.has(neighbor) or not data.provinces[neighbor] is Dictionary or not data.provinces[neighbor].get("neighbors") is Array:
+				return false
+			if pid not in data.provinces[neighbor].neighbors:
+				return false
+		if p.army != null:
+			if not p.army is Dictionary or p.army.get("faction") != p.owner or not p.army.get("units") is Array:
+				return false
+			for unit in p.army.units:
+				if not unit is Dictionary or not unit.get("type") is String or get_unit_stats(unit.type).is_empty() or not _nonnegative_number(unit.get("count")):
+					return false
+			if p.army.has("moves_left") and not _nonnegative_number(p.army.moves_left):
+				return false
+	return true
+
+func _nonnegative_number(value: Variant) -> bool:
+	return (value is int or value is float) and is_finite(float(value)) and value >= 0
