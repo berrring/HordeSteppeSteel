@@ -39,15 +39,21 @@ func _ensure_containers():
 
 func build_map(provinces_data: Dictionary):
 	_ensure_containers()
+	current_selected_pid = ""
+	movement_path.hide_path()
+	# Detach old visuals immediately so physics picking cannot hit a stale map.
 	# Clear existing
 	for child in get_children():
-		if child != road_container and child != river_container:
+		if child != road_container and child != river_container and child != movement_path:
+			remove_child(child)
 			child.queue_free()
 	province_nodes.clear()
 	
 	for child in road_container.get_children():
+		road_container.remove_child(child)
 		child.queue_free()
 	for child in river_container.get_children():
+		river_container.remove_child(child)
 		child.queue_free()
 		
 	# Instantiate each province
@@ -56,7 +62,7 @@ func build_map(provinces_data: Dictionary):
 		var p_vis = ProvinceVisual.new()
 		p_vis.name = "Province_" + pid
 		add_child(p_vis)
-		p_vis.setup(pid, p_data)
+		p_vis.setup(pid, p_data, _elevation(pid, provinces_data))
 		
 		p_vis.clicked.connect(_on_province_clicked)
 		p_vis.mouse_entered_province.connect(_on_province_entered)
@@ -70,50 +76,66 @@ func build_map(provinces_data: Dictionary):
 	# Build winding river
 	_build_river()
 
-func _build_connecting_roads(provinces_data: Dictionary):
-	var processed_edges = {}
-	var mat_road = ModelBuilder.get_mat("dirt_road")
-	
-	for pid in provinces_data:
-		var p1 = provinces_data[pid]
-		var pos1 = Vector3(p1.x, 0.06, p1.z)
-		
-		for neighbor_id in p1.neighbors:
-			var edge_key = [pid, neighbor_id]
-			edge_key.sort()
-			var key_str = edge_key[0] + "_" + edge_key[1]
-			
-			if processed_edges.has(key_str):
+func _elevation(pid: String, data: Dictionary) -> float:
+	if data.size() == 3 and data.has("sarai") and data.has("crossroads") and data.has("sarkel"):
+		return float(ProvinceVisual.CHECKPOINT_ELEVATIONS.get(pid, 0.0))
+	return 0.0
+
+func _build_connecting_roads(provinces_data: Dictionary) -> void:
+	var processed: Dictionary = {}
+	for pid: String in provinces_data:
+		for neighbor: String in provinces_data[pid].neighbors:
+			if not provinces_data.has(neighbor):
 				continue
-			processed_edges[key_str] = true
-			
-			if provinces_data.has(neighbor_id):
-				var p2 = provinces_data[neighbor_id]
-				var pos2 = Vector3(p2.x, 0.06, p2.z)
-				
-				var dir = pos2 - pos1
-				var dist = dir.length()
-				var mid = (pos1 + pos2) * 0.5
-				
-				# Check if this road crosses the central river line (between X=-2 and X=2)
-				var is_river_crossing = (pos1.x * pos2.x < 0 or (abs(mid.x) < 1.2 and abs(mid.z) < 2.5))
-				
-				if is_river_crossing:
-					# Place a stylized wooden bridge over the river
-					var bridge = ModelBuilder.create_bridge(dist * 0.45, 0.5)
-					bridge.position = mid + Vector3(0, 0.05, 0)
-					bridge.rotation.y = atan2(dir.x, dir.z)
-					road_container.add_child(bridge)
-				else:
-					# Create low-poly dirt road strip
-					var road_mesh = MeshInstance3D.new()
-					var mesh = BoxMesh.new()
-					mesh.size = Vector3(0.42, 0.05, dist * 0.70)
-					road_mesh.mesh = mesh
-					road_mesh.material_override = mat_road
-					road_mesh.position = mid
-					road_mesh.rotation.y = atan2(dir.x, dir.z)
-					road_container.add_child(road_mesh)
+			var edge: Array = [pid, neighbor]
+			edge.sort()
+			var key: String = str(edge)
+			if processed.has(key):
+				continue
+			processed[key] = true
+			var route: PackedVector3Array = surface_route(pid, neighbor)
+			var a: Vector3 = route[1]
+			var b: Vector3 = route[2]
+			var horizontal := Vector3(b.x - a.x, 0, b.z - a.z).normalized()
+			var distance: float = a.distance_to(b)
+			var crossing: bool = route[0].x * route[3].x < 0.0
+			var road: Node3D
+			if crossing:
+				road = ModelBuilder.create_bridge(distance, 0.5)
+			else:
+				road = Node3D.new()
+				ModelBuilder._add_box(road, Vector3(0.42, 0.05, distance), Vector3(0, -0.025, 0), ModelBuilder.get_mat("dirt_road"))
+			road.name = "Connection_" + pid + "_" + neighbor
+			road.position = (a + b) * 0.5
+			road.basis = Basis.looking_at(b - a, Vector3.UP)
+			road_container.add_child(road)
+			if crossing:
+				_ground_bridge_supports(road)
+			for endpoint: Vector3 in [a, b]:
+				ModelBuilder._add_box(road_container, Vector3(0.08, 0.18, 0.08), endpoint + horizontal.cross(Vector3.UP) * 0.28 + Vector3.UP * 0.09, ModelBuilder.get_mat("snow"))
+
+func _ground_bridge_supports(bridge: Node3D) -> void:
+	# A sloping deck needs vertical posts long enough to reach the table bed.
+	for i: int in range(3, bridge.get_child_count()):
+		var post: MeshInstance3D = bridge.get_child(i) as MeshInstance3D
+		var attachment: Vector3 = bridge.position + bridge.basis * Vector3(post.position.x, -0.08, post.position.z)
+		var height: float = maxf(0.05, attachment.y + 0.44)
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = 0.04
+		mesh.bottom_radius = 0.05
+		mesh.height = height
+		mesh.radial_segments = 4
+		post.mesh = ModelBuilder.flat_mesh(mesh)
+		var center: Vector3 = attachment - Vector3.UP * height * 0.5
+		post.position = bridge.basis.inverse() * (center - bridge.position)
+		post.basis = bridge.basis.inverse()
+
+func surface_route(from_pid: String, to_pid: String) -> PackedVector3Array:
+	var a: Vector3 = province_nodes[from_pid].position + Vector3.UP * ProvinceVisual.SURFACE_Y
+	var b: Vector3 = province_nodes[to_pid].position + Vector3.UP * ProvinceVisual.SURFACE_Y
+	var horizontal: Vector3 = Vector3(b.x - a.x, 0, b.z - a.z).normalized()
+	# Stay level on each plateau, then follow the same incline as its road.
+	return PackedVector3Array([a, a + horizontal * 1.6, b - horizontal * 1.6, b])
 
 func _build_river():
 	# Distinct historical river winding from northern forests down through steppe
@@ -121,7 +143,7 @@ func _build_river():
 		Vector3(-4.5, -0.05, -9.0),
 		Vector3(-3.5, -0.05, -6.5),
 		Vector3(-2.0, -0.05, -4.0),
-		Vector3(-1.0, -0.05, -1.0),
+		Vector3(-1.0, -0.05, 0.0 if province_nodes.has("crossroads") else -1.0),
 		Vector3(0.5, -0.05, 1.5),
 		Vector3(2.5, -0.05, 3.5),
 		Vector3(4.5, -0.05, 5.0),
@@ -129,6 +151,10 @@ func _build_river():
 	
 	var mat_water = ModelBuilder.get_mat("water")
 	var mat_bank = ModelBuilder.get_mat("arid_steppe")
+	# Faceted joint caps close the gaps between the angled river segments.
+	for i: int in range(1, river_points.size() - 1):
+		ModelBuilder._add_cylinder(river_container, 0.6, 0.6, 0.06, river_points[i] - Vector3.UP * 0.04, mat_bank, 8)
+		ModelBuilder._add_cylinder(river_container, 0.425, 0.425, 0.08, river_points[i], mat_water, 8)
 	
 	for i in range(river_points.size() - 1):
 		var p1 = river_points[i]
@@ -148,7 +174,7 @@ func _build_river():
 		bank_mesh.rotation.y = angle
 		river_container.add_child(bank_mesh)
 		
-		# Stylized Water Surface with specular gloss
+		# Matte steel-blue water stays within the approved palette.
 		var r_mesh = MeshInstance3D.new()
 		var box = BoxMesh.new()
 		box.size = Vector3(0.85, 0.08, dist)
@@ -227,13 +253,16 @@ func _on_province_entered(pid: String):
 		if gm and gm.provinces.has(current_selected_pid):
 			var sel_p = gm.provinces[current_selected_pid]
 			if sel_p.neighbors.has(pid):
-				var p1 = gm.provinces[current_selected_pid]
 				var p2 = gm.provinces[pid]
-				var pos1 = Vector3(p1.x, 0, p1.z)
-				var pos2 = Vector3(p2.x, 0, p2.z)
+				var pos1: Vector3 = province_nodes[current_selected_pid].position + Vector3.UP * ProvinceVisual.SURFACE_Y
+				var pos2: Vector3 = province_nodes[pid].position + Vector3.UP * ProvinceVisual.SURFACE_Y
 				var is_attack = (sel_p.owner == "mongol" and p2.owner != "mongol")
 				if movement_path:
-					movement_path.show_path(pos1, pos2, is_attack)
+					movement_path.position = pos1
+					movement_path.basis = Basis.looking_at(pos2 - pos1, Vector3.UP)
+					movement_path.show_path(Vector3.ZERO, Vector3(0, 0, -pos1.distance_to(pos2)), is_attack)
+					movement_path.mat_move.albedo_color = ModelBuilder.GREEN
+					movement_path.mat_attack.albedo_color = ModelBuilder.GOLD
 
 func _on_province_exited(_pid: String):
 	province_hovered.emit("")
@@ -246,14 +275,13 @@ func animate_army_march(from_pid: String, to_pid: String, on_complete: Callable)
 		on_complete.call()
 		return
 		
-	var p1 = gm.provinces[from_pid]
-	var p2 = gm.provinces[to_pid]
-	var pos1 = Vector3(p1.x, 0.05, p1.z)
-	var pos2 = Vector3(p2.x, 0.05, p2.z)
+	var route: PackedVector3Array = surface_route(from_pid, to_pid)
+	var pos1: Vector3 = route[0]
+	var pos2: Vector3 = route[3]
 	var dir = pos2 - pos1
 	
 	# Temporary marching figurine
-	var march_unit = ModelBuilder.create_horse_archer_unit(Color(0.92, 0.75, 0.22))
+	var march_unit = ModelBuilder.create_horse_archer_unit(ModelBuilder.GOLD)
 	march_unit.scale = Vector3(0.55, 0.55, 0.55)
 	march_unit.position = pos1
 	march_unit.rotation.y = atan2(dir.x, dir.z)
@@ -265,14 +293,18 @@ func animate_army_march(from_pid: String, to_pid: String, on_complete: Callable)
 	var tw = create_tween()
 	var duration = 0.95
 	
-	# Interpolate position
-	tw.tween_property(march_unit, "position", pos2, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	# Stay on each plateau, following the road incline only between its edges.
+	var total_length: float = 0.0
+	for i: int in range(3):
+		total_length += route[i].distance_to(route[i + 1])
+	for i: int in range(3):
+		var segment_duration: float = duration * route[i].distance_to(route[i + 1]) / maxf(total_length, 0.001)
+		tw.tween_property(march_unit, "position", route[i + 1], segment_duration)
 	
 	# Mid-point dust effect
-	var mid = (pos1 + pos2) * 0.5
-	tw.parallel().tween_callback(func():
-		FXManager.spawn_dust_puff(self, mid)
-	).set_delay(duration * 0.5)
+	var mid: Vector3 = (route[1] + route[2]) * 0.5
+	var dust_tween: Tween = create_tween()
+	dust_tween.tween_callback(func(): FXManager.spawn_dust_puff(self, mid)).set_delay(duration * 0.5)
 	
 	tw.tween_callback(func():
 		FXManager.spawn_dust_puff(self, pos2)

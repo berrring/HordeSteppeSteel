@@ -1,91 +1,99 @@
 class_name ModelBuilder
 extends RefCounted
 
-const Palette = preload("res://scripts/core/palette.gd")
+const GREEN: Color = Color("6B8E23")
+const BROWN: Color = Color("5C4033")
+const GOLD: Color = Color("DAA520")
+const WHITE: Color = Color("E8ECEF")
+const BLUE: Color = Color("2B3A4A")
 
 # Cache materials for high performance and visual consistency
 static var _materials: Dictionary = {}
 static var _initialized: bool = false
 
-static func get_mat(name: String, color: Color = Color.WHITE, roughness: float = 0.8, metallic: float = 0.0) -> StandardMaterial3D:
+static func get_mat(name: String, color: Color = WHITE, roughness: float = 0.85, _metallic: float = 0.0) -> StandardMaterial3D:
 	if not _initialized:
 		_initialized = true
 		_init_materials()
 	if not _materials.has(name):
 		var mat = StandardMaterial3D.new()
-		mat.albedo_color = color
-		mat.roughness = roughness
-		mat.metallic = metallic
+		mat.albedo_color = _nearest_color(color)
+		mat.roughness = maxf(roughness, 0.85)
+		mat.metallic = 0.0
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 		mat.diffuse_mode = BaseMaterial3D.DIFFUSE_LAMBERT
 		mat.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 		# Gamified miniature rim highlight for crisp low-poly silhouettes
-		mat.rim_enabled = true
+		mat.rim_enabled = false
 		mat.rim = 0.42
 		mat.rim_tint = 0.35
 		_materials[name] = mat
+	# Dust effects animate this material alpha. Give those callers an instance
+	# so fading a puff cannot change every road and pasture in the campaign.
+	if name == "dirt_road":
+		return _materials[name].duplicate() as StandardMaterial3D
 	return _materials[name]
 
 static func _init_materials():
 	# Official Canon Five-Color Palette Materials
 	# 1. Steppe Green / Olive (#6B8E23)
-	get_mat("steppe_grass", Palette.STEPPE_GREEN, 0.85, 0.0)
-	get_mat("forest_grass", Palette.STEPPE_GREEN.darkened(0.25), 0.8, 0.0)
-	get_mat("arid_steppe", Color(0.74, 0.66, 0.44), 0.9, 0.0)
-	get_mat("water", Color(0.18, 0.58, 0.82), 0.12, 0.15)
-	get_mat("rock", Color(0.52, 0.52, 0.50), 0.75, 0.05)
-	get_mat("rock_dark", Palette.DEEP_STEEL_BLUE.lightened(0.12), 0.8, 0.05)
-	get_mat("cliff_bedrock", Color(0.28, 0.22, 0.17), 0.85, 0.0)
-	get_mat("dirt_road", Color(0.58, 0.44, 0.28), 0.9, 0.0)
+	get_mat("steppe_grass", GREEN, 0.85, 0.0)
+	get_mat("forest_grass", GREEN, 0.85, 0.0)
+	get_mat("arid_steppe", BROWN, 0.85, 0.0)
+	get_mat("water", BLUE, 0.85, 0.0)
+	get_mat("rock", BLUE, 0.85, 0.0)
+	get_mat("rock_dark", BLUE, 0.85, 0.0)
+	get_mat("cliff_bedrock", BROWN, 0.85, 0.0)
+	get_mat("dirt_road", BROWN, 0.85, 0.0)
 	
 	# 2. Wood Brown (#5C4033)
-	get_mat("wood_dark", Palette.WOOD_BROWN.darkened(0.25), 0.8, 0.0)
-	get_mat("wood_log", Palette.WOOD_BROWN, 0.75, 0.0)
-	get_mat("wood_plank", Palette.WOOD_BROWN.lightened(0.28), 0.7, 0.0)
-	get_mat("bridge_wood", Palette.WOOD_BROWN.lightened(0.15), 0.75, 0.0)
-	get_mat("pedestal_base", Palette.WOOD_BROWN.darkened(0.4), 0.4, 0.25)
-	get_mat("straw_thatch", Color(0.82, 0.72, 0.38), 0.85, 0.0)
+	get_mat("wood_dark", BROWN, 0.85, 0.0)
+	get_mat("wood_log", BROWN, 0.85, 0.0)
+	get_mat("wood_plank", BROWN, 0.85, 0.0)
+	get_mat("bridge_wood", BROWN, 0.85, 0.0)
+	get_mat("pedestal_base", BROWN, 0.85, 0.0)
+	get_mat("straw_thatch", GOLD, 0.85, 0.0)
 	
 	# 3. Bronze Gold (#DAA520)
-	get_mat("gold_ornament", Palette.BRONZE_GOLD, 0.25, 0.9)
-	get_mat("bronze", Palette.BRONZE_GOLD.darkened(0.12), 0.35, 0.8)
-	get_mat("flower_yellow", Palette.BRONZE_GOLD, 0.5, 0.0)
+	get_mat("gold_ornament", GOLD, 0.85, 0.0)
+	get_mat("bronze", GOLD, 0.85, 0.0)
+	get_mat("flower_yellow", GOLD, 0.85, 0.0)
 	
 	# 4. Snow White / Light Gray (#E8ECEF)
-	get_mat("snow", Palette.SNOW_WHITE, 0.65, 0.0)
-	get_mat("birch_bark", Palette.SNOW_WHITE.darkened(0.04), 0.55, 0.0)
-	get_mat("yurt_felt", Palette.SNOW_WHITE.darkened(0.06), 0.85, 0.0)
-	get_mat("horse_grey", Palette.SNOW_WHITE.darkened(0.12), 0.7, 0.0)
-	get_mat("flower_white", Palette.SNOW_WHITE, 0.5, 0.0)
+	get_mat("snow", WHITE, 0.85, 0.0)
+	get_mat("birch_bark", WHITE, 0.85, 0.0)
+	get_mat("yurt_felt", WHITE, 0.85, 0.0)
+	get_mat("horse_grey", WHITE, 0.85, 0.0)
+	get_mat("flower_white", WHITE, 0.85, 0.0)
 	
 	# 5. Deep Steel Blue (#2B3A4A)
-	get_mat("steel", Color(0.80, 0.82, 0.86), 0.28, 0.9)
-	get_mat("steel_dark", Palette.DEEP_STEEL_BLUE, 0.35, 0.85)
-	get_mat("iron_dark", Palette.DEEP_STEEL_BLUE.darkened(0.25), 0.4, 0.75)
+	get_mat("steel", BLUE, 0.85, 0.0)
+	get_mat("steel_dark", BLUE, 0.85, 0.0)
+	get_mat("iron_dark", BLUE, 0.85, 0.0)
 	
 	# Foliage
-	get_mat("pine_needles", Palette.STEPPE_GREEN.darkened(0.45), 0.65, 0.0)
-	get_mat("oak_leaves", Palette.STEPPE_GREEN.darkened(0.12), 0.7, 0.0)
-	get_mat("birch_leaves", Palette.STEPPE_GREEN.lightened(0.22), 0.65, 0.0)
+	get_mat("pine_needles", GREEN, 0.85, 0.0)
+	get_mat("oak_leaves", GREEN, 0.85, 0.0)
+	get_mat("birch_leaves", GREEN, 0.85, 0.0)
 	
 	# Factions & Special Effects
-	get_mat("yurt_red", Palette.FACTION_RUS, 0.75, 0.0)
-	get_mat("flower_red", Palette.FACTION_RUS, 0.5, 0.0)
-	get_mat("mongol_leather", Palette.WOOD_BROWN.lightened(0.12), 0.65, 0.0)
-	get_mat("horse_brown", Palette.WOOD_BROWN, 0.7, 0.0)
-	get_mat("horse_black", Color(0.14, 0.13, 0.12), 0.65, 0.0)
-	
-	get_mat("faction_mongol", Palette.FACTION_MONGOL, 0.55, 0.1)
-	get_mat("faction_cuman", Palette.FACTION_CUMAN, 0.55, 0.1)
-	get_mat("faction_rus", Palette.FACTION_RUS, 0.55, 0.1)
-	get_mat("faction_byzantine", Palette.FACTION_BYZANTINE, 0.55, 0.1)
-	get_mat("faction_seljuk", Palette.FACTION_SELJUK, 0.55, 0.1)
-	get_mat("faction_khwarazm", Palette.FACTION_KHWARAZM, 0.55, 0.1)
-	get_mat("faction_neutral", Palette.FACTION_NEUTRAL, 0.65, 0.05)
-	
-	var ember = get_mat("ember_glow", Color(1.0, 0.48, 0.12), 0.2, 0.0)
+	get_mat("yurt_red", BLUE, 0.85, 0.0)
+	get_mat("flower_red", BLUE, 0.85, 0.0)
+	get_mat("mongol_leather", BROWN, 0.85, 0.0)
+	get_mat("horse_brown", BROWN, 0.85, 0.0)
+	get_mat("horse_black", BROWN, 0.85, 0.0)
+
+	get_mat("faction_mongol", GOLD, 0.85, 0.0)
+	get_mat("faction_cuman", BROWN, 0.85, 0.0)
+	get_mat("faction_rus", BLUE, 0.85, 0.0)
+	get_mat("faction_byzantine", GOLD, 0.85, 0.0)
+	get_mat("faction_seljuk", BLUE, 0.85, 0.0)
+	get_mat("faction_khwarazm", GREEN, 0.85, 0.0)
+	get_mat("faction_neutral", WHITE, 0.85, 0.0)
+
+	var ember = get_mat("ember_glow", GOLD, 0.85, 0.0)
 	ember.emission_enabled = true
-	ember.emission = Color(1.0, 0.52, 0.15)
+	ember.emission = GOLD
 	ember.emission_energy_multiplier = 2.4
 
 
@@ -111,7 +119,7 @@ static func _add_cylinder(parent: Node3D, top_rad: float, bot_rad: float, height
 	mesh.bottom_radius = bot_rad
 	mesh.height = height
 	mesh.radial_segments = radial_seg
-	mi.mesh = mesh
+	mi.mesh = flat_mesh(mesh)
 	mi.material_override = mat
 	mi.position = pos
 	parent.add_child(mi)
@@ -124,7 +132,7 @@ static func _add_sphere(parent: Node3D, radius: float, pos: Vector3, mat: Materi
 	mesh.height = radius * 2.0
 	mesh.rings = rings
 	mesh.radial_segments = radial
-	mi.mesh = mesh
+	mi.mesh = flat_mesh(mesh)
 	mi.material_override = mat
 	mi.position = pos
 	parent.add_child(mi)
@@ -285,7 +293,7 @@ static func create_bridge(length: float = 1.4, width: float = 0.6) -> Node3D:
 	var mat_dark = get_mat("wood_dark")
 	
 	# Main deck
-	_add_box(root, Vector3(width, 0.08, length), Vector3(0, 0.06, 0), mat_wood)
+	_add_box(root, Vector3(width, 0.08, length), Vector3(0, -0.04, 0), mat_wood)
 	# Side timber railings
 	_add_box(root, Vector3(0.05, 0.16, length), Vector3(width * 0.5 - 0.03, 0.16, 0), mat_dark)
 	_add_box(root, Vector3(0.05, 0.16, length), Vector3(-width * 0.5 + 0.03, 0.16, 0), mat_dark)
@@ -316,13 +324,20 @@ static func create_yurt(radius: float = 0.6, is_khan: bool = false) -> Node3D:
 	var base_h = radius * 0.7
 	_add_cylinder(root, radius, radius, base_h, Vector3(0, base_h * 0.5, 0), mat_felt, 12)
 	
-	# Decorative red felt band around midriff
+	# Woven steel-blue felt band around midriff
 	_add_cylinder(root, radius * 1.01, radius * 1.01, base_h * 0.15, Vector3(0, base_h * 0.6, 0), mat_red, 12)
 	
 	# Conical roof
 	var roof_h = radius * 0.65
 	_add_cylinder(root, radius * 0.15, radius * 1.05, roof_h, Vector3(0, base_h + roof_h * 0.5, 0), mat_felt, 12)
 	
+	# Timber roof ribs and tension ties distinguish a felt ger from a cylinder.
+	for i: int in range(8):
+		var angle: float = TAU * float(i) / 8.0
+		var lower := Vector3(cos(angle) * radius * 1.055, base_h, sin(angle) * radius * 1.055)
+		var upper := Vector3(cos(angle) * radius * 0.16, base_h + roof_h, sin(angle) * radius * 0.16)
+		var rib: MeshInstance3D = _add_box(root, Vector3(0.018, 0.018, lower.distance_to(upper)), (lower + upper) * 0.5, mat_wood)
+		rib.basis = Basis.looking_at(upper - lower, Vector3.UP)
 	# Smoke ring (Töno) at apex
 	var tono_mat = mat_gold if is_khan else mat_red
 	_add_cylinder(root, radius * 0.18, radius * 0.18, 0.08, Vector3(0, base_h + roof_h + 0.04, 0), tono_mat, 8)
@@ -391,7 +406,16 @@ static func create_rus_fortress(is_capital: bool = false) -> Node3D:
 	var wall_h = 0.5
 	var wall_thick = 0.12
 	# 4 walls
-	_add_box(root, Vector3(wall_r * 2.0, wall_h, wall_thick), Vector3(0, wall_h * 0.5, wall_r), mat_log)
+	# Leave an actual gate opening in the front palisade.
+	for side: float in [-1.0, 1.0]:
+		_add_box(root, Vector3(wall_r - 0.18, wall_h, wall_thick), Vector3(side * (wall_r + 0.18) * 0.5, wall_h * 0.5, wall_r), mat_log)
+	_add_box(root, Vector3(0.46, 0.10, 0.18), Vector3(0, wall_h, wall_r), mat_dark)
+	# Pointed stakes and horizontal bracing read as a medieval timber outpost.
+	for side: float in [-1.0, 1.0]:
+		for i: int in range(9):
+			var along: float = lerpf(-wall_r, wall_r, float(i) / 8.0)
+			_add_cone(root, 0.055, 0.15, Vector3(side * wall_r, wall_h + 0.075, along), mat_log, 4)
+		_add_box(root, Vector3(0.045, 0.06, wall_r * 2.0), Vector3(side * (wall_r + 0.07), 0.18, 0), mat_dark)
 	_add_box(root, Vector3(wall_r * 2.0, wall_h, wall_thick), Vector3(0, wall_h * 0.5, -wall_r), mat_log)
 	_add_box(root, Vector3(wall_thick, wall_h, wall_r * 2.0), Vector3(wall_r, wall_h * 0.5, 0), mat_log)
 	_add_box(root, Vector3(wall_thick, wall_h, wall_r * 2.0), Vector3(-wall_r, wall_h * 0.5, 0), mat_log)
@@ -635,7 +659,7 @@ static func _build_horse(parent: Node3D, horse_mat: Material, scale_m: float = 1
 	return horse
 
 # 1. Mongol Horse Archer
-static func create_horse_archer_unit(faction_color: Color = Color(0.9, 0.75, 0.22)) -> Node3D:
+static func create_horse_archer_unit(faction_color: Color = GOLD) -> Node3D:
 	_init_materials()
 	var root = Node3D.new()
 	root.name = "HorseArcher"
@@ -667,7 +691,7 @@ static func create_horse_archer_unit(faction_color: Color = Color(0.9, 0.75, 0.2
 	return root
 
 # 2. Heavy Cavalry (Armored Cataphract / Mongol Guard)
-static func create_heavy_cavalry_unit(faction_color: Color = Color(0.9, 0.75, 0.22)) -> Node3D:
+static func create_heavy_cavalry_unit(faction_color: Color = GOLD) -> Node3D:
 	_init_materials()
 	var root = Node3D.new()
 	root.name = "HeavyCavalry"
@@ -700,7 +724,7 @@ static func create_heavy_cavalry_unit(faction_color: Color = Color(0.9, 0.75, 0.
 	return root
 
 # 3. Rus' Infantry Soldier with Shield & Axe
-static func create_infantry_unit(faction_color: Color = Color(0.78, 0.2, 0.2)) -> Node3D:
+static func create_infantry_unit(faction_color: Color = BLUE) -> Node3D:
 	_init_materials()
 	var root = Node3D.new()
 	root.name = "InfantryUnit"
@@ -738,7 +762,7 @@ static func create_infantry_unit(faction_color: Color = Color(0.78, 0.2, 0.2)) -
 	return root
 
 # 4. Heavy Spearman / Druzhina
-static func create_spearman_unit(faction_color: Color = Color(0.78, 0.2, 0.2)) -> Node3D:
+static func create_spearman_unit(faction_color: Color = BLUE) -> Node3D:
 	_init_materials()
 	var root = Node3D.new()
 	root.name = "SpearmanUnit"
@@ -770,7 +794,7 @@ static func create_spearman_unit(faction_color: Color = Color(0.78, 0.2, 0.2)) -
 	return root
 
 # 5. Siege Engine (Traction Trebuchet)
-static func create_siege_engine(faction_color: Color = Color(0.5, 0.5, 0.5)) -> Node3D:
+static func create_siege_engine(faction_color: Color = BLUE) -> Node3D:
 	_init_materials()
 	var root = Node3D.new()
 	root.name = "SiegeEngine"
@@ -797,3 +821,26 @@ static func create_siege_engine(faction_color: Color = Color(0.5, 0.5, 0.5)) -> 
 	_add_box(root, Vector3(0.3, 0.3, 0.3), Vector3(0, 0.6, 0.7), mat_stone)
 	
 	return root
+
+static func _nearest_color(color: Color) -> Color:
+	var result: Color = WHITE
+	var distance: float = INF
+	for candidate: Color in [GREEN, BROWN, GOLD, WHITE, BLUE]:
+		var delta: float = Vector3(color.r - candidate.r, color.g - candidate.g, color.b - candidate.b).length_squared()
+		if delta < distance:
+			distance = delta
+			result = candidate
+	result.a = color.a
+	return result
+
+static func flat_mesh(source: PrimitiveMesh) -> ArrayMesh:
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var arrays: Array = source.get_mesh_arrays()
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	tool.set_smooth_group(-1)
+	for index: int in indices:
+		tool.add_vertex(vertices[index])
+	tool.generate_normals()
+	return tool.commit()

@@ -1,6 +1,8 @@
 class_name StrategicCamera
 extends Node3D
 
+const PERSPECTIVE_FOV: float = 42.0
+
 @export var pan_speed: float = 18.0
 @export var zoom_speed: float = 3.5
 @export var min_zoom: float = 6.0
@@ -9,93 +11,107 @@ extends Node3D
 @export var pitch_angle: float = 54.0
 
 var camera: Camera3D
-var target_position: Vector3 = Vector3(0, 0, 0)
+var target_position: Vector3 = Vector3.ZERO
+# Both projections share an equivalent perspective distance, in world units.
 var target_zoom: float = 14.0
 var current_zoom: float = 14.0
+var orthographic_distance: float = 14.0
+var _applied_distance: float = 14.0
 
 var is_dragging: bool = false
 var drag_start_mouse_pos: Vector2 = Vector2.ZERO
 var drag_start_cam_pos: Vector3 = Vector3.ZERO
 
-func _ready():
+func _ready() -> void:
+	min_zoom = maxf(min_zoom, 1.0)
+	max_zoom = maxf(max_zoom, min_zoom)
+	default_zoom = clampf(default_zoom, min_zoom, max_zoom)
 	target_zoom = default_zoom
 	current_zoom = default_zoom
+	target_position = position
 	_setup_camera()
 
-func _setup_camera():
+func _setup_camera() -> void:
 	camera = Camera3D.new()
 	camera.name = "MainCamera3D"
 	camera.current = true
-	camera.fov = 42.0
+	camera.fov = PERSPECTIVE_FOV
 	camera.near = 0.5
 	camera.far = 200.0
+	camera.position.z = current_zoom
+	_applied_distance = current_zoom
 	add_child(camera)
-	
 	rotation_degrees.x = -pitch_angle
 	_update_camera_transform()
 
-func _process(dt: float):
+func _process(dt: float) -> void:
 	_handle_keyboard_pan(dt)
-	
-	# Smoothly interpolate position and zoom
-	position = position.lerp(target_position, clamp(dt * 10.0, 0.0, 1.0))
-	current_zoom = lerp(current_zoom, target_zoom, clamp(dt * 12.0, 0.0, 1.0))
+	position = position.lerp(target_position, clampf(dt * 10.0, 0.0, 1.0))
+	current_zoom = lerpf(current_zoom, target_zoom, clampf(dt * 12.0, 0.0, 1.0))
 	_update_camera_transform()
 
-func _update_camera_transform():
-	if camera:
-		camera.position = Vector3(0, 0, current_zoom)
+func _update_camera_transform() -> void:
+	if not is_instance_valid(camera):
+		return
+	camera.fov = PERSPECTIVE_FOV
+	if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		# Match the perspective footprint at the tracked plane. Parallel rays
+		# require changing size; the camera stays stationary while zooming.
+		var offset_z: float = camera.position.z - _applied_distance
+		camera.size = maxf(0.1, current_zoom + offset_z) * 2.0 * tan(deg_to_rad(PERSPECTIVE_FOV * 0.5))
+	else:
+		# Apply only the zoom delta so custom translation, rotation and lens
+		# offsets survive. Returning after ortho zoom uses its equivalent dolly.
+		camera.position.z += current_zoom - _applied_distance
+		_applied_distance = current_zoom
 
-func _handle_keyboard_pan(dt: float):
+func toggle_projection() -> void:
+	if not is_instance_valid(camera):
+		return
+	if camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		orthographic_distance = camera.position.z
+		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	else:
+		camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+	_update_camera_transform()
+
+func _handle_keyboard_pan(dt: float) -> void:
 	if is_dragging:
 		return
-		
-	var move_vec = Vector2.ZERO
-	if Input.is_action_pressed("camera_pan_up"):
-		move_vec.y -= 1.0
-	if Input.is_action_pressed("camera_pan_down"):
-		move_vec.y += 1.0
-	if Input.is_action_pressed("camera_pan_left"):
-		move_vec.x -= 1.0
-	if Input.is_action_pressed("camera_pan_right"):
-		move_vec.x += 1.0
-		
+	var move_vec: Vector2 = Input.get_vector("camera_pan_left", "camera_pan_right", "camera_pan_up", "camera_pan_down")
 	if move_vec != Vector2.ZERO:
-		move_vec = move_vec.normalized()
-		var pan_factor = (current_zoom / default_zoom) * pan_speed * dt
+		var pan_factor: float = (current_zoom / default_zoom) * pan_speed * dt
 		target_position.x += move_vec.x * pan_factor
 		target_position.z += move_vec.y * pan_factor
-		
-		# Clamp within bounds of map
-		target_position.x = clamp(target_position.x, -14.0, 16.0)
-		target_position.z = clamp(target_position.z, -16.0, 14.0)
+		_clamp_target()
 
-func _unhandled_input(event: InputEvent):
-	# Mouse Wheel Zoom
+func _clamp_target() -> void:
+	target_position.x = clampf(target_position.x, -14.0, 16.0)
+	target_position.z = clampf(target_position.z, -16.0, 14.0)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F10:
+		toggle_projection()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-			target_zoom = clamp(target_zoom - zoom_speed, min_zoom, max_zoom)
+			target_zoom = clampf(target_zoom - zoom_speed, min_zoom, max_zoom)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-			target_zoom = clamp(target_zoom + zoom_speed, min_zoom, max_zoom)
+			target_zoom = clampf(target_zoom + zoom_speed, min_zoom, max_zoom)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			if event.pressed:
-				is_dragging = true
+			is_dragging = event.pressed
+			if is_dragging:
 				drag_start_mouse_pos = event.position
 				drag_start_cam_pos = target_position
-			else:
-				is_dragging = false
-				
-	# Mouse Drag Panning
 	elif event is InputEventMouseMotion and is_dragging:
-		var delta_mouse = event.position - drag_start_mouse_pos
-		var drag_factor = 0.022 * (current_zoom / default_zoom)
+		var delta_mouse: Vector2 = event.position - drag_start_mouse_pos
+		var drag_factor: float = 0.022 * (current_zoom / default_zoom)
 		target_position.x = drag_start_cam_pos.x - delta_mouse.x * drag_factor
 		target_position.z = drag_start_cam_pos.z - delta_mouse.y * drag_factor * 1.2
-		
-		target_position.x = clamp(target_position.x, -14.0, 16.0)
-		target_position.z = clamp(target_position.z, -16.0, 14.0)
+		_clamp_target()
 
-func focus_on(target_pos: Vector3, new_zoom: float = -1.0):
+func focus_on(target_pos: Vector3, new_zoom: float = -1.0) -> void:
 	target_position = Vector3(target_pos.x, 0, target_pos.z)
 	if new_zoom > 0:
-		target_zoom = clamp(new_zoom, min_zoom, max_zoom)
+		target_zoom = clampf(new_zoom, min_zoom, max_zoom)
