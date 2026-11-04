@@ -430,8 +430,17 @@ func resolve_battle(attacker_pid: String, defender_pid: String) -> Dictionary:
 		factions.get(att_army.faction, {}).get("bonus_attack", 1.0),
 		factions.get(def_faction_id, {}).get("bonus_defense", 1.0))
 	result["province"] = defender_pid
+	apply_battle_result(attacker_pid, defender_pid, result)
+	return result
+
+# Shared state transaction for campaign resolution and the tactical presentation.
+func apply_battle_result(attacker_pid: String, defender_pid: String, result: Dictionary, tactical_capture: bool = false) -> void:
+	var att_army = provinces[attacker_pid].army
+	var def_faction_id: String = provinces[defender_pid].owner
 	att_army.units = result.surviving_attackers.duplicate(true)
 	if result.attacker_won:
+		if tactical_capture:
+			provinces[defender_pid].defense_bonus = maxi(0, provinces[defender_pid].defense_bonus - 5)
 		provinces[defender_pid].owner = att_army.faction
 		provinces[defender_pid].army = att_army
 		provinces[attacker_pid].army = null
@@ -442,7 +451,7 @@ func resolve_battle(attacker_pid: String, defender_pid: String) -> Dictionary:
 	else:
 		if att_army.units.is_empty():
 			provinces[attacker_pid].army = null
-	return result
+
 
 func end_turn():
 	# Player income
