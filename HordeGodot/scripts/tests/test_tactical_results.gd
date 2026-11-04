@@ -23,7 +23,8 @@ func run() -> void:
 		battle.setup_battle("sarai", "crossroads", gm)
 		var result: Dictionary = battle.calculated_result.duplicate(true)
 		verify(result.attacker_won == victory, "Forced outcome")
-		verify(gm.provinces == original, "Presentation does not mutate campaign")
+		original.sarai.army["moves_left"] = 0
+		verify(gm.provinces == original, "Battle reservation spends movement without applying casualties early")
 		battle._on_autoresolve_pressed()
 		for i in range(battle.attacker_squads.size()):
 			verify(battle.attacker_squads[i].count == result.attacker_stack_counts[i], "Displayed attackers match exact stack losses")

@@ -89,6 +89,11 @@ func _clamp_target() -> void:
 	target_position.x = clampf(target_position.x, -14.0, 16.0)
 	target_position.z = clampf(target_position.z, -16.0, 14.0)
 
+func _input(event: InputEvent) -> void:
+	# A release over a HUD control may never reach _unhandled_input.
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and not event.pressed:
+		is_dragging = false
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F10:
 		toggle_projection()

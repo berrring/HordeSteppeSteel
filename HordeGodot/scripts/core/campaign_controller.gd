@@ -12,6 +12,8 @@ var map_3d: CampaignMap3D
 var camera_rig: StrategicCamera
 var hud: CampaignHUD
 var sun_light: DirectionalLight3D
+var commands_busy: bool = false
+
 var env_node: WorldEnvironment
 
 func _ready():
@@ -45,6 +47,7 @@ func _ready():
 		if gm.provinces.is_empty():
 			gm.start_new_campaign()
 		gm.game_over.connect(_on_game_over)
+		gm.campaign_loaded.connect(_on_campaign_loaded)
 		map_3d.build_map(gm.provinces)
 		hud.update_resources()
 		
@@ -60,6 +63,21 @@ func _ready():
 		if cap_pid != "" and gm.provinces.has(cap_pid):
 			var cap_p = gm.provinces[cap_pid]
 			camera_rig.focus_on(Vector3(cap_p.x, 0, cap_p.z), 13.0)
+
+		if gm.current_state in [gm.GameState.VICTORY, gm.GameState.DEFEAT]:
+			hud.show_game_over(gm.current_state == gm.GameState.VICTORY)
+
+func _process(_delta: float) -> void:
+	if not is_instance_valid(hud) or not is_instance_valid(map_3d):
+		return
+	var gm = _get_game_manager()
+	var blocked: bool = commands_busy or hud.has_open_modal() or gm == null or gm.current_state != gm.GameState.CAMPAIGN
+	map_3d.orders_locked = blocked
+	if camera_rig:
+		camera_rig.set_process(not blocked)
+		camera_rig.set_process_unhandled_input(not blocked)
+		if blocked:
+			camera_rig.is_dragging = false
 
 func _setup_environment():
 	# Directional Sun (Crisp Warm Golden-Hour Lighting)
@@ -127,200 +145,147 @@ func _update_act_atmosphere(turn: int, p_count: int):
 		env.fog_density = 0.008
 
 func _on_province_selected(pid: String):
+	if commands_busy:
+		return
 	if pid == "":
 		hud.deselect_province()
 	else:
 		hud.select_province(pid)
 
 func _on_attack_target_selected(attacker_pid: String, defender_pid: String):
-	hud.prompt_attack(attacker_pid, defender_pid)
+	if not commands_busy:
+		hud.prompt_attack(attacker_pid, defender_pid)
+
+func _set_commands_busy(value: bool) -> void:
+	commands_busy = value
+	map_3d.orders_locked = value
+	hud.commands_locked = value
+	hud.update_actions_state()
 
 func _on_attack(attacker_pid: String, defender_pid: String):
 	var gm = _get_game_manager()
-	if gm == null:
+	if gm == null or commands_busy or hud.has_open_modal():
 		return
-		
-	# First animate army marching to the target border
+	var validation: Dictionary = gm.validate_army_order(attacker_pid, defender_pid)
+	if not validation.allowed:
+		hud.log_event(validation.reason)
+		_play_audio("error")
+		return
+	if gm.provinces[defender_pid].owner == gm.current_faction:
+		var moved: Dictionary = gm.move_army(attacker_pid, defender_pid)
+		if not moved.allowed:
+			hud.log_event(moved.reason)
+			return
+		_set_commands_busy(true)
+		map_3d.animate_army_march(attacker_pid, defender_pid, func():
+			_set_commands_busy(false)
+			map_3d.refresh_all(gm.provinces)
+			map_3d.select_province(defender_pid)
+			hud.update_resources()
+			hud.log_event("Army marched to %s. Movement left: %d." % [gm.provinces[defender_pid].name, gm.moves_left(gm.provinces[defender_pid].army)])
+		)
+		return
+	var result: Dictionary = gm.begin_battle(attacker_pid, defender_pid)
+	if result.is_empty():
+		return
+	_set_commands_busy(true)
 	map_3d.animate_army_march(attacker_pid, defender_pid, func():
 		hud.visible = false
+		camera_rig.set_process(false)
+		camera_rig.set_process_unhandled_input(false)
+		camera_rig.is_dragging = false
 		var battle = TacticalBattle.new()
 		battle.name = "ActiveBattle"
 		add_child(battle)
-		battle.setup_battle(attacker_pid, defender_pid)
-		battle.battle_completed.connect(func(res: Dictionary):
-			hud.visible = true
-			_on_tactical_battle_completed(res)
-		)
+		battle.battle_completed.connect(_on_tactical_battle_completed)
+		battle.setup_battle(attacker_pid, defender_pid, gm)
 	)
 
 func _on_tactical_battle_completed(result: Dictionary):
+	_set_commands_busy(false)
+	hud.visible = true
+	camera_rig.set_process(true)
+	camera_rig.set_process_unhandled_input(true)
 	var gm = _get_game_manager()
 	if gm == null:
 		return
 		
 	map_3d.refresh_all(gm.provinces)
 	hud.update_resources()
-	hud.deselect_province()
+	map_3d.deselect()
 	
 	var def_pid = result.defender_pid
 	if gm.provinces.has(def_pid):
 		var p = gm.provinces[def_pid]
 		if result.winner == "attacker":
 			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "CAPTURED!", Color(1.0, 0.88, 0.3))
-			hud.select_province(def_pid)
+			map_3d.select_province(def_pid)
 			var faction_name = gm.factions[gm.current_faction].name if gm.factions.has(gm.current_faction) else "Our Realm"
 			hud.log_event("Victory! Province of %s swearing fealty to the %s." % [p.name, faction_name])
 		else:
 			hud.log_event("Assault on %s was repulsed." % p.name)
 			
-	# Check overall campaign victory
-	var vic = gm.check_victory()
-	if vic == "win":
-		_on_game_over(true)
-	elif vic == "lose":
-		_on_game_over(false)
+	gm.evaluate_campaign()
 
 func _on_recruit(unit_type: String):
 	var gm = _get_game_manager()
-	if gm == null or hud.selected_pid == "":
+	if gm == null or commands_busy or hud.has_open_modal():
 		return
-		
-	var pid = hud.selected_pid
-	var p = gm.provinces.get(pid, null)
-	if p == null or p.owner != gm.current_faction:
-		return
-		
-	var stats = gm.get_unit_stats(unit_type)
-	var player = gm.get_player_faction()
-	var cost_gold = stats.get("cost_gold", 100)
-	var cost_food = stats.get("cost_food", 30)
-	
-	if player.gold < cost_gold or player.food < cost_food:
+	var result: Dictionary = gm.recruit_units(hud.selected_pid, unit_type)
+	if not result.allowed:
 		_play_audio("error")
-		hud.log_event("Not enough resources to recruit %s (Needs %dg, %df)!" % [unit_type.replace("_", " "), cost_gold, cost_food])
+		hud.log_event(result.reason)
 		return
-		
-	player.gold -= cost_gold
-	player.food -= cost_food
 	_play_audio("recruit")
-	
-	if p.army == null:
-		p.army = {"faction": gm.current_faction, "units": []}
-		
-	# Find existing unit group or add new
-	var found = false
-	for u in p.army.units:
-		if u.type == unit_type:
-			u.count += 50
-			found = true
-			break
-	if not found:
-		p.army.units.append({"type": unit_type, "count": 50})
-		
-	FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+50 Warriors", Color(0.9, 0.85, 0.3))
-	hud.log_event("Recruited 50 %s in %s!" % [unit_type.replace("_", " "), p.name])
-	map_3d.refresh_all(gm.provinces)
-	hud.update_resources()
-	hud.select_province(pid)
+	_refresh_selected_province()
+	hud.log_event(result.reason)
 
 func _on_construct(building_type: String):
 	var gm = _get_game_manager()
-	if gm == null or hud.selected_pid == "":
+	if gm == null or commands_busy or hud.has_open_modal():
 		return
-		
-	var pid = hud.selected_pid
-	var p = gm.provinces.get(pid, null)
-	if p == null or p.owner != gm.current_faction:
+	var result: Dictionary = gm.construct_building(hud.selected_pid, building_type)
+	if not result.allowed:
+		_play_audio("error")
+		hud.log_event(result.reason)
 		return
-		
-	var player = gm.get_player_faction()
-	
-	match building_type:
-		"town_center":
-			if player.wood < 120:
-				_play_audio("error")
-				hud.log_event("Need 120 wood for Town Center!")
-				return
-			player.wood -= 120
-			p.income_gold += 40
-			p.income_food += 20
-			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+40g +20f", Palette.BRONZE_GOLD)
-			hud.log_event("Developed Town Center in %s (+40 Gold, +20 Food)!" % p.name)
-		"barracks":
-			if player.wood < 100:
-				_play_audio("error")
-				hud.log_event("Need 100 wood for Barracks!")
-				return
-			player.wood -= 100
-			p.defense_bonus += 15
-			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+15 Defense", Color(0.7, 0.85, 1.0))
-			hud.log_event("Constructed Barracks in %s (+15 Defense)!" % p.name)
-		"stables":
-			if player.wood < 80:
-				_play_audio("error")
-				hud.log_event("Need 80 wood for Stables!")
-				return
-			player.wood -= 80
-			p.income_food += 40
-			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+40 Food", Color(0.65, 0.95, 0.55))
-			hud.log_event("Erected Stables in %s (+40 Food/turn)!" % p.name)
-		"fortification":
-			if player.wood < 100:
-				_play_audio("error")
-				hud.log_event("Need 100 wood for Fortifications!")
-				return
-			player.wood -= 100
-			p.defense_bonus += 20
-			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+20 Defense", Color(0.7, 0.85, 1.0))
-			hud.log_event("Built Watchtowers & Fortifications in %s (+20 Defense)!" % p.name)
-		"palisade":
-			if player.wood < 80:
-				_play_audio("error")
-				hud.log_event("Need 80 wood for Palisade!")
-				return
-			player.wood -= 80
-			p.defense_bonus += 10
-			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+10 Defense", Color(0.7, 0.85, 1.0))
-			hud.log_event("Built Palisade in %s (+10 Defense)!" % p.name)
-		"pasture":
-			if player.wood < 80:
-				_play_audio("error")
-				hud.log_event("Need 80 wood for Pasture!")
-				return
-			player.wood -= 80
-			p.income_food += 40
-			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+40 Food", Color(0.65, 0.95, 0.55))
-			hud.log_event("Constructed Pasture in %s (+40 Food/turn)!" % p.name)
-		"market":
-			if player.wood < 120:
-				_play_audio("error")
-				hud.log_event("Need 120 wood for Market!")
-				return
-			player.wood -= 120
-			p.income_gold += 50
-			FXManager.spawn_floating_text(self, Vector3(p.x, 0, p.z), "+50 Gold", Color(1.0, 0.88, 0.3))
-			hud.log_event("Established Market in %s (+50 Gold/turn)!" % p.name)
-			
 	_play_audio("build")
-	p.buildings.append(building_type)
+	_refresh_selected_province()
+	hud.log_event(result.reason)
+
+func _refresh_selected_province() -> void:
+	var gm = _get_game_manager()
+	map_3d.refresh_all(gm.provinces)
 	hud.update_resources()
-	hud.select_province(pid)
+	if hud.selected_pid != "":
+		hud.select_province(hud.selected_pid)
+
+func _on_campaign_loaded() -> void:
+	var gm = _get_game_manager()
+	map_3d.build_map(gm.provinces)
+	map_3d.deselect()
+	hud.hide_modals()
+	hud.update_resources()
+	_update_act_atmosphere(gm.turn, gm.province_count(gm.current_faction))
+	for p in gm.provinces.values():
+		if p.owner == gm.current_faction:
+			camera_rig.focus_on(Vector3(p.x, 0, p.z))
+			break
 
 func _on_end_turn():
 	var gm = _get_game_manager()
-	if gm == null:
+	if gm == null or commands_busy or hud.has_open_modal():
 		return
-		
+	_set_commands_busy(true)
 	_play_audio("drum")
 	gm.end_turn()
-	map_3d.refresh_all(gm.provinces)
-	hud.update_resources()
+	_set_commands_busy(false)
+	_refresh_selected_province()
 	_update_act_atmosphere(gm.turn, gm.province_count(gm.current_faction))
-	hud.log_event("Turn %d began. Income collected across your territories." % gm.turn)
-	
-	# Re-select current if still valid
-	if hud.selected_pid != "":
-		hud.select_province(hud.selected_pid)
+	var summary: String = "Turn %d — %s. Income collected." % [gm.turn, gm.season_name()]
+	if not gm.campaign_log.is_empty():
+		summary += " " + " ".join(gm.campaign_log)
+	hud.log_event(summary)
 
 func _play_audio(type: String):
 	var loop = Engine.get_main_loop() as SceneTree
@@ -338,6 +303,8 @@ func _on_game_over(is_victory: bool):
 	hud.show_game_over(is_victory)
 
 func _on_return_to_menu():
+	if commands_busy:
+		return
 	get_tree().change_scene_to_file("res://scenes/main_menu/main_menu.tscn")
 
 func _get_game_manager():

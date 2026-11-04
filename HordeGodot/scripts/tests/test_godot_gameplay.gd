@@ -70,8 +70,7 @@ func _init():
 	# Let player army in Sarai attack neutral Urgench
 	var b_res = gm.resolve_battle("sarai", "urgench")
 	test.call("Battle resolution produces valid winner", b_res.has("winner") and (b_res.winner == "attacker" or b_res.winner == "defender"))
-	if b_res.winner == "attacker":
-		test.call("Winning battle captures province for attacker", gm.provinces["urgench"].owner == "mongol")
+	test.call("Winning battle captures province for attacker", b_res.winner != "attacker" or gm.provinces["urgench"].owner == "mongol")
 		
 	# Test 7: AI Turn Execution
 	var rus_gold_before = gm.factions["rus"].gold
@@ -300,6 +299,7 @@ func _init():
 	test.call("Neutral faction never receives normal AI turn", neutral_gold_after_direct == 0 and neutral_gold_after_all == 0 and sarai_owner_after == "mongol")
 	
 	# Subtest 2: Old save files without current_scenario load as full_campaign
+	gm_test.start_new_campaign("mongol", "full_campaign")
 	var legacy_save_path = "user://legacy_save_test.json"
 	var legacy_data = {
 		"turn": 4,

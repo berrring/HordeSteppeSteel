@@ -28,14 +28,14 @@ var collision_area: Area3D
 
 func setup(p_id: String, data: Dictionary, elevation: float = 0.0):
 	province_id = p_id
-	province_data = data
+	province_data = data.duplicate(true)
 	position = Vector3(data.x, elevation, data.z)
 	
 	_build_terrain()
 	_build_settlement()
 	_build_decorations()
-	_build_army_representation()
 	_build_labels()
+	_build_army_representation()
 	_build_highlight_ring()
 	_build_interaction_area()
 	update_state()
@@ -211,6 +211,7 @@ func _build_army_representation():
 func _refresh_army_model():
 	# Clear old children
 	for child in army_node.get_children():
+		army_node.remove_child(child)
 		child.queue_free()
 		
 	var army = province_data.army
@@ -245,7 +246,7 @@ func _refresh_army_model():
 		var total_strength = 0
 		for u in army.units:
 			total_strength += int(u.count)
-		army_label_3d.text = "⚔ " + str(total_strength)
+		army_label_3d.text = "%s · %d troops" % [province_data.owner.capitalize(), total_strength]
 		army_label_3d.visible = true
 
 func _build_labels():
@@ -263,7 +264,7 @@ func _build_labels():
 	
 	# Army badge label
 	army_label_3d = Label3D.new()
-	army_label_3d.position = Vector3(-0.65, 1.15, 0.75)
+	army_label_3d.position = Vector3(0, 1.45, 0.75)
 	army_label_3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	army_label_3d.no_depth_test = true
 	army_label_3d.font_size = 28
@@ -359,11 +360,12 @@ func update_state():
 
 func refresh_from_data(new_data: Dictionary):
 	var owner_changed = (province_data.owner != new_data.owner)
-	province_data = new_data
+	province_data = new_data.duplicate(true)
 	
 	if owner_changed:
 		# Rebuild settlement to match new owner
 		if settlement_node:
+			remove_child(settlement_node)
 			settlement_node.queue_free()
 		_build_settlement()
 		

@@ -16,6 +16,7 @@ var river_container: Node3D
 var movement_path: MovementPath3D
 
 var current_selected_pid: String = ""
+var orders_locked: bool = false
 
 func _init():
 	_ensure_containers()
@@ -185,29 +186,22 @@ func _build_river():
 		river_container.add_child(r_mesh)
 
 func _on_province_clicked(pid: String):
-	_play_audio("click")
 	var gm = _get_game_manager()
-	if gm == null or not gm.provinces.has(pid):
+	if orders_locked or gm == null or gm.current_state != gm.GameState.CAMPAIGN or not gm.provinces.has(pid):
 		return
-		
-	var clicked_p = gm.provinces[pid]
-	var player_faction = "mongol"
-	
-	if current_selected_pid == "":
-		select_province(pid)
-	else:
-		var current_p = gm.provinces[current_selected_pid]
-		
-		if pid == current_selected_pid:
-			deselect()
-		elif current_p.owner == player_faction and current_p.neighbors.has(pid):
-			if clicked_p.owner != player_faction:
-				_play_audio("horn")
-				attack_target_selected.emit(current_selected_pid, pid)
-			else:
-				select_province(pid)
-		else:
-			select_province(pid)
+	# Physics picking also runs behind UI panels: never issue map commands there.
+	if get_viewport().gui_get_hovered_control() != null:
+		return
+	_play_audio("click")
+	if pid == current_selected_pid:
+		deselect()
+		return
+	if gm.provinces.has(current_selected_pid):
+		var validation: Dictionary = gm.validate_army_order(current_selected_pid, pid)
+		if validation.allowed:
+			attack_target_selected.emit(current_selected_pid, pid)
+			return
+	select_province(pid)
 
 func select_province(pid: String):
 	current_selected_pid = pid
@@ -218,14 +212,14 @@ func select_province(pid: String):
 	if gm != null and gm.provinces.has(pid):
 		var sel_p = gm.provinces[pid]
 		neighbors = sel_p.neighbors
-		is_player = (sel_p.owner == "mongol")
+		is_player = (sel_p.owner == gm.current_faction)
 		
 	# Update highlights on all provinces
 	for id in province_nodes:
 		var node = province_nodes[id] as ProvinceVisual
 		var is_sel = (id == pid)
 		var is_adj = neighbors.has(id)
-		var is_enemy_adj = is_adj and is_player and gm != null and gm.provinces.has(id) and gm.provinces[id].owner != "mongol"
+		var is_enemy_adj = is_adj and is_player and gm != null and gm.validate_army_order(pid, id).allowed
 		
 		node.set_selected(is_sel)
 		node.set_targetable(is_enemy_adj)
@@ -245,6 +239,8 @@ func deselect():
 	province_selected.emit("")
 
 func _on_province_entered(pid: String):
+	if orders_locked:
+		return
 	province_hovered.emit(pid)
 	
 	# Show movement or attack preview path if adjacent to selected province
@@ -252,11 +248,11 @@ func _on_province_entered(pid: String):
 		var gm = _get_game_manager()
 		if gm and gm.provinces.has(current_selected_pid):
 			var sel_p = gm.provinces[current_selected_pid]
-			if sel_p.neighbors.has(pid):
+			if gm.validate_army_order(current_selected_pid, pid).allowed:
 				var p2 = gm.provinces[pid]
 				var pos1: Vector3 = province_nodes[current_selected_pid].position + Vector3.UP * ProvinceVisual.SURFACE_Y
 				var pos2: Vector3 = province_nodes[pid].position + Vector3.UP * ProvinceVisual.SURFACE_Y
-				var is_attack = (sel_p.owner == "mongol" and p2.owner != "mongol")
+				var is_attack = (sel_p.owner == gm.current_faction and p2.owner != gm.current_faction)
 				if movement_path:
 					movement_path.position = pos1
 					movement_path.basis = Basis.looking_at(pos2 - pos1, Vector3.UP)
@@ -280,8 +276,19 @@ func animate_army_march(from_pid: String, to_pid: String, on_complete: Callable)
 	var pos2: Vector3 = route[3]
 	var dir = pos2 - pos1
 	
-	# Temporary marching figurine
-	var march_unit = ModelBuilder.create_horse_archer_unit(ModelBuilder.GOLD)
+	# Render the host's actual unit family instead of a Mongol horse for everyone.
+	var army = gm.provinces[from_pid].army
+	if army == null:
+		army = gm.provinces[to_pid].army
+	var unit_type: String = army.units[0].type if army != null and not army.units.is_empty() else "infantry"
+	var color: Color = ModelBuilder.GOLD if army != null and army.faction == "mongol" else ModelBuilder.BLUE
+	var march_unit: Node3D
+	match unit_type:
+		"horse_archer", "light_cavalry": march_unit = ModelBuilder.create_horse_archer_unit(color)
+		"heavy_cavalry": march_unit = ModelBuilder.create_heavy_cavalry_unit(color)
+		"spearman": march_unit = ModelBuilder.create_spearman_unit(color)
+		"siege": march_unit = ModelBuilder.create_siege_engine(color)
+		_: march_unit = ModelBuilder.create_infantry_unit(color)
 	march_unit.scale = Vector3(0.55, 0.55, 0.55)
 	march_unit.position = pos1
 	march_unit.rotation.y = atan2(dir.x, dir.z)
