@@ -62,6 +62,10 @@ var audio_manager_ref = null
 var calculated_result: Dictionary = {}
 var result_submitted: bool = false
 var presentation_tween: Tween
+var replay_cancelled: bool = false
+var replay_rounds: int = 4
+var replay_effects: Array[Node3D] = []
+var replay_tweens: Array[Tween] = []
 
 
 func setup_battle(att_pid: String, def_pid: String, gm_override = null, am_override = null):
@@ -265,6 +269,8 @@ func _build_3d_battlefield():
 		model.rotation_degrees = Vector3(0, 90, 0) # Facing east toward enemy
 		battlefield_root.add_child(model)
 		sq["node"] = model
+		sq["formation_position"] = model.position
+		sq["formation_rotation"] = model.rotation_degrees
 		
 		# 3D Selection Ring & Badge
 		var ring = _create_unit_ring(Color(1.0, 0.85, 0.2))
@@ -284,6 +290,8 @@ func _build_3d_battlefield():
 		model.rotation_degrees = Vector3(0, -90, 0) # Facing west toward attacker
 		battlefield_root.add_child(model)
 		sq["node"] = model
+		sq["formation_position"] = model.position
+		sq["formation_rotation"] = model.rotation_degrees
 		
 		var ring = _create_unit_ring(Color(0.9, 0.25, 0.2))
 		model.add_child(ring)
@@ -719,54 +727,179 @@ func _on_end_round_pressed():
 	_start_enemy_turn()
 
 func _start_enemy_turn():
-	is_player_turn = false
-	lbl_round.text = "⚔ ENEMY COUNTER-ATTACK PHASE..."
-	lbl_round.add_theme_color_override("font_color", Color(0.95, 0.45, 0.35))
-	_update_unit_card()
-	
-	# Execute enemy attacks sequentially
-	var living_enemies = []
-	for sq in defender_squads:
-		if sq.count > 0:
-			living_enemies.append(sq)
-			
-	if living_enemies.is_empty():
-		_check_battle_over()
-		return
-		
-	var tw = create_tween()
-	for i in range(living_enemies.size()):
-		var enemy = living_enemies[i]
-		tw.tween_interval(0.4)
-		tw.tween_callback(func():
-			if _check_battle_over():
-				return
-			# Find living player target
-			var target = _get_player_target()
-			if not target.is_empty():
-				_execute_attack(enemy, target, false)
-		)
-		
-	tw.tween_interval(0.5)
-	tw.tween_callback(func():
-		if not _check_battle_over():
-			_start_next_round()
-	)
+	# A single automatic engagement resolves both fronts without pausing for orders.
+	_start_automated_battle_sequence()
+
+func _on_end_round_pressed():
+	_on_autoresolve_pressed()
 
 func _start_automated_battle_sequence():
-	# Combat is calculated once; animation only presents those exact casualties.
+	if replay_cancelled or result_modal.visible:
+		return
 	is_busy = true
-	lbl_round.text = "BATTLE REPLAY"
-	log_label.text = "Showing calculated battle casualties."
+	is_player_turn = false
+	lbl_round.text = "⚔ BATTLE BEGINS"
+	log_label.text = "The armies close ranks. Bows and cavalry lead the attack."
+	preview_label.text = "Automatic battle · four volleys decide the result."
 	for button in [btn_attack, btn_defend, btn_end_turn]:
-		button.disabled = true
 		button.visible = false
-		button.tooltip_text = "Combat is calculated once; use Auto-resolve to skip the report animation."
-	presentation_tween = create_tween()
-	for step in range(1, 7):
-		presentation_tween.tween_interval(0.35)
-		presentation_tween.tween_callback(_present_casualties.bind(float(step) / 6.0))
-	presentation_tween.tween_callback(func(): _finish_combat(calculated_result.attacker_won))
+		button.disabled = true
+	btn_autoresolve.text = "⚡ FAST-FORWARD"
+	btn_retreat.text = "🏳 WITHDRAW"
+	_update_unit_card()
+	_run_battle_replay()
+
+func _run_battle_replay() -> void:
+	for round_index in range(1, replay_rounds + 1):
+		if replay_cancelled or not is_inside_tree():
+			return
+		round_number = round_index
+		lbl_round.text = "⚔ VOLLEY %d / %d" % [round_index, replay_rounds]
+		lbl_round.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
+		log_label.text = _round_narration(round_index)
+		await _play_army_volley(attacker_squads, defender_squads, true)
+		if replay_cancelled or not is_inside_tree():
+			return
+		await _apply_replay_losses(defender_squads, calculated_result.defender_stack_counts, float(round_index) / replay_rounds)
+		_update_top_bar()
+		if round_index < replay_rounds:
+			await create_timer(0.22).timeout
+		if replay_cancelled or not is_inside_tree():
+			return
+		await _play_army_volley(defender_squads, attacker_squads, false)
+		if replay_cancelled or not is_inside_tree():
+			return
+		await _apply_replay_losses(attacker_squads, calculated_result.attacker_stack_counts, float(round_index) / replay_rounds)
+		_update_top_bar()
+		_update_unit_card()
+		if round_index < replay_rounds:
+			await create_timer(0.3).timeout
+	if replay_cancelled or not is_inside_tree():
+		return
+	_finish_combat(calculated_result.attacker_won)
+
+func _round_narration(round_index: int) -> String:
+	match round_index:
+		1: return "Scouts find the line. Archers loose their opening volley."
+		2: return "Cavalry rides around the flank as the defenders brace."
+		3: return "The battle line buckles. Reinforcements press forward."
+		_: return "The last volleys decide the field."
+
+func _play_army_volley(army: Array[Dictionary], targets: Array[Dictionary], attacking: bool) -> void:
+	for squad_index in range(army.size()):
+		if replay_cancelled or not is_inside_tree():
+			return
+		var squad: Dictionary = army[squad_index]
+		if squad.count <= 0:
+			continue
+		var target: Dictionary = _choose_replay_target(squad, targets)
+		if target.is_empty():
+			continue
+		_select_replay_squad(squad, attacking)
+		await _animate_replay_strike(squad, target)
+		if replay_cancelled or not is_inside_tree():
+			return
+		if squad_index < army.size() - 1:
+			await create_timer(0.12).timeout
+
+func _choose_replay_target(attacker: Dictionary, targets: Array[Dictionary]) -> Dictionary:
+	var target: Dictionary = {}
+	var lowest_score: float = INF
+	for candidate in targets:
+		if candidate.count <= 0:
+			continue
+		var distance: float = attacker.node.position.distance_to(candidate.node.position)
+		var armor: float = float(candidate.defense) / maxf(float(candidate.attack), 1.0)
+		var counter_bonus: float = 0.0
+		if candidate.type in ["horse_archer", "siege"] and attacker.type in ["heavy_cavalry", "light_cavalry"]:
+			counter_bonus = -1.4
+		elif candidate.type == "spearman" and attacker.type in ["heavy_cavalry", "light_cavalry"]:
+			counter_bonus = 1.1
+		var score: float = distance + armor * 0.35 + counter_bonus
+		if score < lowest_score:
+			lowest_score = score
+			target = candidate
+	return target
+
+func _select_replay_squad(squad: Dictionary, attacking: bool) -> void:
+	for candidate in attacker_squads + defender_squads:
+		var ring: MeshInstance3D = candidate.get("highlight")
+		if ring != null:
+			ring.visible = candidate == squad
+			if ring.visible:
+				var material := ring.material_override as StandardMaterial3D
+				material.albedo_color = Palette.SNOW_WHITE if attacking else Palette.BRONZE_GOLD
+	if attacking:
+		for index in range(attacker_squads.size()):
+			if attacker_squads[index] == squad:
+				selected_squad_index = index
+				_update_unit_card()
+				break
+
+func _animate_replay_strike(attacker: Dictionary, defender: Dictionary) -> void:
+	var ranged: bool = attacker.type in ["horse_archer", "siege"] or attacker.range > 1
+	if ranged:
+		_play_sound("arrow")
+		var projectile := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = 0.11 if attacker.type != "siege" else 0.24
+		mesh.height = mesh.radius * 2.0
+		projectile.mesh = mesh
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = Palette.BRONZE_GOLD if attacker.faction == attacker_faction else Palette.SNOW_WHITE
+		projectile.material_override = material
+		projectile.position = attacker.node.position + Vector3(0.0, 1.25, 0.0)
+		battlefield_root.add_child(projectile)
+		replay_effects.append(projectile)
+		var shot := battlefield_root.create_tween()
+		shot.tween_property(projectile, "position", defender.node.position + Vector3(0.0, 0.8, 0.0), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		shot.parallel().tween_property(projectile, "scale", Vector3(0.35, 0.35, 0.35), 0.28)
+		replay_tweens.append(shot)
+		await shot.finished
+		if is_instance_valid(projectile):
+			projectile.queue_free()
+	else:
+		_play_sound("cavalry" if attacker.type in ["heavy_cavalry", "light_cavalry"] else "sword")
+		var original: Vector3 = attacker.node.position
+		var direction: Vector3 = (defender.node.position - original).normalized()
+		var charge := battlefield_root.create_tween()
+		replay_tweens.append(charge)
+		charge.tween_property(attacker.node, "position", original + direction * 0.85, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		charge.tween_property(attacker.node, "position", original, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		charge.parallel().tween_property(attacker.node, "rotation_degrees:y", attacker.node.rotation_degrees.y + 10.0, 0.18)
+		await charge.finished
+	if replay_cancelled or not is_inside_tree():
+		return
+	var hit := attacker.node.create_tween()
+	replay_tweens.append(hit)
+	var defender_origin: Vector3 = defender.node.position
+	hit.tween_property(defender.node, "position", defender_origin + Vector3(0, 0, 0.12), 0.06)
+	hit.tween_property(defender.node, "position", defender_origin, 0.1)
+	await hit.finished
+
+func _apply_replay_losses(squads: Array[Dictionary], final_counts: Array, progress: float) -> void:
+	for index in range(squads.size()):
+		var squad: Dictionary = squads[index]
+		var previous: int = squad.count
+		var remaining: int = int(lerpf(float(squad.max_count), float(final_counts[index]), progress))
+		if previous <= remaining:
+			continue
+		var losses: int = previous - remaining
+		squad.count = remaining
+		squad.hp = remaining * squad.base_hp_per_man
+		if squad.badge:
+			squad.badge.text = "⚔ " + str(remaining)
+		if squad.hp_bar:
+			squad.hp_bar.value = squad.hp
+		if remaining <= 0:
+			squad.node.visible = false
+			if squad.highlight:
+				squad.highlight.visible = false
+		var color: Color = Palette.BRONZE_GOLD if squad.faction == attacker_faction else Palette.SNOW_WHITE
+		_show_floating_damage(squad.node.position, losses, color)
+		log_label.text = "%s loses %d warriors; %d remain." % [squad.type.replace("_", " ").capitalize(), losses, remaining]
+		await create_timer(0.08).timeout
 
 func _present_casualties(progress: float) -> void:
 	for side in [[attacker_squads, calculated_result.attacker_stack_counts], [defender_squads, calculated_result.defender_stack_counts]]:
@@ -778,21 +911,16 @@ func _present_casualties(progress: float) -> void:
 			squad.hp = squad.count * squad.base_hp_per_man
 			if squad.get("badge"):
 				squad.badge.text = "⚔ " + str(squad.count)
+			if squad.get("hp_bar"):
+				squad.hp_bar.value = squad.hp
 			if squad.get("node"):
 				squad.node.visible = squad.count > 0
+				if squad.count <= 0 and squad.get("highlight"):
+					squad.highlight.visible = false
 				if previous_count > squad.count:
-					_play_sound("arrow" if squad.type in ["horse_archer", "siege"] else "sword")
 					_show_floating_damage(squad.node.position, previous_count - squad.count, Palette.BRONZE_GOLD)
-				if squad.count > 0 and progress < 1.0:
-					if not squad.has("replay_origin"):
-						squad["replay_origin"] = squad.node.position
-					var motion: Tween = squad.node.create_tween()
-					var offset: Vector3 = Vector3(0.12 if squad.faction == attacker_faction else -0.12, 0, 0)
-					motion.tween_property(squad.node, "position", squad.replay_origin + offset, 0.12)
-					motion.tween_property(squad.node, "position", squad.replay_origin, 0.12)
 	_update_top_bar()
 	_update_unit_card()
-	preview_label.text = "Battle losses follow the campaign calculation."
 
 func _get_player_target() -> Dictionary:
 	for sq in attacker_squads:
@@ -839,6 +967,7 @@ func _check_battle_over() -> bool:
 func _on_autoresolve_pressed():
 	if result_modal.visible:
 		return
+	_stop_replay_effects()
 	if presentation_tween:
 		presentation_tween.kill()
 	_present_casualties(1.0)
@@ -847,6 +976,7 @@ func _on_autoresolve_pressed():
 func _on_retreat_pressed():
 	if result_modal.visible:
 		return
+	_stop_replay_effects()
 	if presentation_tween:
 		presentation_tween.kill()
 	var gm = _get_game_manager()
@@ -855,8 +985,24 @@ func _on_retreat_pressed():
 	_play_sound("horn")
 	_finish_combat(false, true)
 
+func _stop_replay_effects() -> void:
+	replay_cancelled = true
+	for tween in replay_tweens:
+		if tween != null and tween.is_valid():
+			tween.kill()
+	replay_tweens.clear()
+	for effect in replay_effects:
+		if is_instance_valid(effect):
+			effect.queue_free()
+	replay_effects.clear()
+	for squad in attacker_squads + defender_squads:
+		if is_instance_valid(squad.get("node")):
+			squad.node.position = squad.get("formation_position", squad.node.position)
+			squad.node.rotation_degrees = squad.get("formation_rotation", squad.node.rotation_degrees)
+
 func _finish_combat(victory: bool, retreated: bool = false):
 	is_busy = true
+	_stop_replay_effects()
 	result_modal.visible = true
 	lbl_round.text = "BATTLE REPORT"
 	btn_retreat.disabled = true
