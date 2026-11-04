@@ -11,7 +11,7 @@ const BLUE: Color = Color("2B3A4A")
 static var _materials: Dictionary = {}
 static var _initialized: bool = false
 
-static func get_mat(name: String, color: Color = Color.WHITE, roughness: float = 0.85, _metallic: float = 0.0) -> StandardMaterial3D:
+static func get_mat(name: String, color: Color = WHITE, roughness: float = 0.85, _metallic: float = 0.0) -> StandardMaterial3D:
 	if not _initialized:
 		_initialized = true
 		_init_materials()
@@ -28,6 +28,10 @@ static func get_mat(name: String, color: Color = Color.WHITE, roughness: float =
 		mat.rim = 0.42
 		mat.rim_tint = 0.35
 		_materials[name] = mat
+	# Dust effects animate this material alpha. Give those callers an instance
+	# so fading a puff cannot change every road and pasture in the campaign.
+	if name == "dirt_road":
+		return _materials[name].duplicate() as StandardMaterial3D
 	return _materials[name]
 
 static func _init_materials():
@@ -115,7 +119,7 @@ static func _add_cylinder(parent: Node3D, top_rad: float, bot_rad: float, height
 	mesh.bottom_radius = bot_rad
 	mesh.height = height
 	mesh.radial_segments = radial_seg
-	mi.mesh = mesh
+	mi.mesh = flat_mesh(mesh)
 	mi.material_override = mat
 	mi.position = pos
 	parent.add_child(mi)
@@ -128,7 +132,7 @@ static func _add_sphere(parent: Node3D, radius: float, pos: Vector3, mat: Materi
 	mesh.height = radius * 2.0
 	mesh.rings = rings
 	mesh.radial_segments = radial
-	mi.mesh = mesh
+	mi.mesh = flat_mesh(mesh)
 	mi.material_override = mat
 	mi.position = pos
 	parent.add_child(mi)
@@ -320,13 +324,20 @@ static func create_yurt(radius: float = 0.6, is_khan: bool = false) -> Node3D:
 	var base_h = radius * 0.7
 	_add_cylinder(root, radius, radius, base_h, Vector3(0, base_h * 0.5, 0), mat_felt, 12)
 	
-	# Decorative red felt band around midriff
+	# Woven steel-blue felt band around midriff
 	_add_cylinder(root, radius * 1.01, radius * 1.01, base_h * 0.15, Vector3(0, base_h * 0.6, 0), mat_red, 12)
 	
 	# Conical roof
 	var roof_h = radius * 0.65
 	_add_cylinder(root, radius * 0.15, radius * 1.05, roof_h, Vector3(0, base_h + roof_h * 0.5, 0), mat_felt, 12)
 	
+	# Timber roof ribs and tension ties distinguish a felt ger from a cylinder.
+	for i: int in range(8):
+		var angle: float = TAU * float(i) / 8.0
+		var lower := Vector3(cos(angle) * radius * 1.055, base_h, sin(angle) * radius * 1.055)
+		var upper := Vector3(cos(angle) * radius * 0.16, base_h + roof_h, sin(angle) * radius * 0.16)
+		var rib: MeshInstance3D = _add_box(root, Vector3(0.018, 0.018, lower.distance_to(upper)), (lower + upper) * 0.5, mat_wood)
+		rib.basis = Basis.looking_at(upper - lower, Vector3.UP)
 	# Smoke ring (Töno) at apex
 	var tono_mat = mat_gold if is_khan else mat_red
 	_add_cylinder(root, radius * 0.18, radius * 0.18, 0.08, Vector3(0, base_h + roof_h + 0.04, 0), tono_mat, 8)
@@ -395,7 +406,16 @@ static func create_rus_fortress(is_capital: bool = false) -> Node3D:
 	var wall_h = 0.5
 	var wall_thick = 0.12
 	# 4 walls
-	_add_box(root, Vector3(wall_r * 2.0, wall_h, wall_thick), Vector3(0, wall_h * 0.5, wall_r), mat_log)
+	# Leave an actual gate opening in the front palisade.
+	for side: float in [-1.0, 1.0]:
+		_add_box(root, Vector3(wall_r - 0.18, wall_h, wall_thick), Vector3(side * (wall_r + 0.18) * 0.5, wall_h * 0.5, wall_r), mat_log)
+	_add_box(root, Vector3(0.46, 0.10, 0.18), Vector3(0, wall_h, wall_r), mat_dark)
+	# Pointed stakes and horizontal bracing read as a medieval timber outpost.
+	for side: float in [-1.0, 1.0]:
+		for i: int in range(9):
+			var along: float = lerpf(-wall_r, wall_r, float(i) / 8.0)
+			_add_cone(root, 0.055, 0.15, Vector3(side * wall_r, wall_h + 0.075, along), mat_log, 4)
+		_add_box(root, Vector3(0.045, 0.06, wall_r * 2.0), Vector3(side * (wall_r + 0.07), 0.18, 0), mat_dark)
 	_add_box(root, Vector3(wall_r * 2.0, wall_h, wall_thick), Vector3(0, wall_h * 0.5, -wall_r), mat_log)
 	_add_box(root, Vector3(wall_thick, wall_h, wall_r * 2.0), Vector3(wall_r, wall_h * 0.5, 0), mat_log)
 	_add_box(root, Vector3(wall_thick, wall_h, wall_r * 2.0), Vector3(-wall_r, wall_h * 0.5, 0), mat_log)
@@ -774,7 +794,7 @@ static func create_spearman_unit(faction_color: Color = BLUE) -> Node3D:
 	return root
 
 # 5. Siege Engine (Traction Trebuchet)
-static func create_siege_engine(faction_color: Color = Color(0.5, 0.5, 0.5)) -> Node3D:
+static func create_siege_engine(faction_color: Color = BLUE) -> Node3D:
 	_init_materials()
 	var root = Node3D.new()
 	root.name = "SiegeEngine"

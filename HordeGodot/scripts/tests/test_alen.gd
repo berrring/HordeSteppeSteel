@@ -62,6 +62,55 @@ func run() -> void:
 		rig._process(0.1)
 		Input.action_release("camera_pan_right")
 		check(rig.target_position.x > before.x, "Keyboard pans in mode " + str(projection))
+	# Test authored offsets and an in-flight tracking target, not only defaults.
+	rig.camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+	rig.current_zoom = 14.0
+	rig.target_zoom = 18.0
+	rig._update_camera_transform()
+	rig.position = Vector3(2, 0, -3)
+	rig.target_position = Vector3(4, 0, 1)
+	rig.camera.position += Vector3(0.4, 0.3, 0.7)
+	rig.camera.rotation.z = 0.03
+	rig.camera.h_offset = 0.15
+	rig.camera.v_offset = -0.1
+	var before_transform: Transform3D = rig.camera.global_transform
+	var before_target: Vector3 = rig.target_position
+	rig.toggle_projection()
+	check(rig.camera.global_transform.is_equal_approx(before_transform), "Custom camera transform survives orthographic switch")
+	check(rig.target_position == before_target and rig.target_zoom == 18.0, "Switch preserves tracking and in-flight zoom target")
+	check(is_equal_approx(rig.camera.h_offset, 0.15) and is_equal_approx(rig.camera.v_offset, -0.1), "Lens offsets survive switch")
+	rig.toggle_projection()
+	check(rig.camera.global_transform.is_equal_approx(before_transform), "Custom transform survives perspective return without zoom")
+	rig.toggle_projection()
+	rig.target_position = rig.position
+	rig.target_zoom = rig.current_zoom
+	before_transform = rig.camera.global_transform
+	var previous_zoom: float = rig.current_zoom
+	rig._unhandled_input(wheel)
+	rig._process(0.01)
+	check(rig.current_zoom < previous_zoom and rig.current_zoom > rig.target_zoom, "Wheel zoom interpolates smoothly")
+	check(rig.camera.global_transform.is_equal_approx(before_transform), "Orthographic interpolation never moves camera")
+	rig._process(1.0)
+	var ortho_size: float = rig.camera.size
+	rig.toggle_projection()
+	check(is_equal_approx(ortho_size, rig.camera.position.z * 2.0 * tan(deg_to_rad(21.0))), "Return from zoomed orthographic matches tracked-plane footprint")
+	check(is_equal_approx(rig.camera.position.x, 0.4) and is_equal_approx(rig.camera.position.y, 0.3), "Zoom preserves authored lateral offsets")
+	for projection: int in [Camera3D.PROJECTION_PERSPECTIVE, Camera3D.PROJECTION_ORTHOGONAL]:
+		rig.camera.projection = projection
+		for i: int in range(30):
+			rig._unhandled_input(wheel)
+		check(rig.target_zoom == rig.min_zoom, "Minimum zoom limit in mode " + str(projection))
+		wheel.button_index = MOUSE_BUTTON_WHEEL_DOWN
+		for i: int in range(30):
+			rig._unhandled_input(wheel)
+		check(rig.target_zoom == rig.max_zoom, "Maximum zoom limit in mode " + str(projection))
+		wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+		rig._process(1.0)
+		check(rig.camera.fov == 42.0, "FOV remains exactly 42 while zooming in mode " + str(projection))
+	rig.camera.position = Vector3(0, 0, rig.current_zoom)
+	rig.camera.rotation = Vector3.ZERO
+	rig.camera.h_offset = 0.0
+	rig.camera.v_offset = 0.0
 	var gm = root.get_node("GameManager")
 	gm.start_new_campaign("mongol", "checkpoint_slice")
 	var map := Map.new()
@@ -74,6 +123,21 @@ func run() -> void:
 		var expected: float = {"sarai": 0.0, "crossroads": 0.5, "sarkel": 0.3}[pid]
 		check(is_equal_approx(province.position.y, expected), pid + " elevation")
 		check(province.get_node("ClickArea").global_position.is_equal_approx(province.global_position), pid + " collider follows terrain")
+		var collider: CollisionShape3D = province.get_node("ClickArea").get_child(0)
+		var cylinder: CylinderShape3D = collider.shape
+		check(is_equal_approx(collider.global_position.y + cylinder.height * 0.5, expected + 0.12), pid + " collider top matches grass surface")
+		check(is_equal_approx(collider.global_position.y - cylinder.height * 0.5, -0.44), pid + " collider base rests on table")
+		check(is_equal_approx(province.get_node("Settlement").position.y, 0.12), pid + " settlement rests on terrain")
+		check(is_equal_approx(province.get_node("ArmyNode").position.y, 0.12), pid + " army rests on terrain")
+		var cap: MeshInstance3D = province.get_node("GrassCap")
+		var terrain_material: StandardMaterial3D = cap.material_override
+		check(is_equal_approx(terrain_material.roughness, 0.85), pid + " exact terrain roughness")
+		var arrays: Array = cap.mesh.surface_get_arrays(0)
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var flat: bool = true
+		for i: int in range(0, normals.size(), 3):
+			flat = flat and normals[i].is_equal_approx(normals[i + 1]) and normals[i].is_equal_approx(normals[i + 2])
+		check(flat, pid + " terrain has flat triangle normals")
 		for projection: int in [Camera3D.PROJECTION_PERSPECTIVE, Camera3D.PROJECTION_ORTHOGONAL]:
 			rig.camera.projection = projection
 			rig.target_position = Vector3(province.position.x, 0, province.position.z)
@@ -95,14 +159,38 @@ func run() -> void:
 		var endpoint_b: Vector3 = road.to_global(Vector3(0, 0, -size_z * 0.5))
 		var ids: PackedStringArray = str(road.name).split("_")
 		check(is_equal_approx(endpoint_a.y, map.province_nodes[ids[1]].position.y + 0.12) and is_equal_approx(endpoint_b.y, map.province_nodes[ids[2]].position.y + 0.12), "Road meets both elevated surfaces: " + str(road.name))
+	var bridge: Node3D = map.road_container.get_node("Connection_sarai_crossroads")
+	check(bridge.get_child_count() == 7, "Sarai to Crossroads uses a supported timber bridge")
+	for i: int in range(3, bridge.get_child_count()):
+		var post: MeshInstance3D = bridge.get_child(i)
+		var bottom: Vector3 = post.to_global(Vector3(0, post.mesh.get_aabb().position.y, 0))
+		check(is_equal_approx(bottom.y, -0.44), "Bridge support reaches table bed: " + str(i))
+	var route: PackedVector3Array = map.surface_route("sarai", "crossroads")
+	check(is_equal_approx(route[0].y, route[1].y) and is_equal_approx(route[2].y, route[3].y), "March stays level on both plateaus")
+	check(route[1].y < route[2].y, "March follows elevated road incline")
+	var completed: Array[bool] = [false]
+	map.animate_army_march("sarai", "crossroads", func(): completed[0] = true)
+	await create_timer(0.15).timeout
+	var marching: Node3D = map.get_node("HorseArcher")
+	check(is_equal_approx(marching.position.y, route[0].y), "Animated march remains on departure plateau")
+	await create_timer(1.4).timeout
+	check(completed[0] and not is_instance_valid(marching), "Animated march completes and removes temporary unit")
+	check(Models.get_mat("dirt_road").albedo_color.a == 1.0, "March dust does not fade shared road materials")
+	map.select_province("sarai")
 	var path: Node3D = map.movement_path
 	map.build_map(gm.provinces)
 	await process_frame
 	check(is_instance_valid(path) and not path.is_queued_for_deletion(), "Map rebuild preserves movement preview")
 	gm.start_new_campaign("mongol", "full_campaign")
 	map.build_map(gm.provinces)
+	check(map.current_selected_pid.is_empty(), "Rebuild clears stale selection")
 	check(map.province_nodes.size() == 12 and gm.factions.size() == 6, "Full campaign retains all provinces and factions")
 	check(is_zero_approx(map.province_nodes.sarai.position.y), "Full campaign retains original terrain layout")
+	for pid: String in map.province_nodes:
+		check(is_zero_approx(map.province_nodes[pid].position.y), "Full campaign original elevation: " + pid)
+	gm.start_new_campaign("mongol", "checkpoint_slice")
+	map.build_map(gm.provinces)
+	check(map.province_nodes.size() == 3 and is_equal_approx(map.province_nodes.crossroads.position.y, 0.5), "Full campaign returns to elevated checkpoint")
 	var allowed: Array[Color] = [Models.GREEN, Models.BROWN, Models.GOLD, Models.WHITE, Models.BLUE]
 	for key: String in Models._materials:
 		var mat: StandardMaterial3D = Models._materials[key]

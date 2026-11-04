@@ -60,7 +60,7 @@ func _build_terrain():
 	c_mesh.height = 0.44 + position.y
 	c_mesh.radial_segments = 7 # Stylized hex-boardgame faceted silhouette
 	cliff_mesh.mesh = ModelBuilder.flat_mesh(c_mesh)
-	cliff_mesh.material_override = ModelBuilder.get_mat("cliff_bedrock")
+	cliff_mesh.material_override = ModelBuilder.get_mat("rock") if province_id == "sarkel" else ModelBuilder.get_mat("cliff_bedrock")
 	cliff_mesh.position = Vector3(0, -0.22 - position.y * 0.5, 0)
 	cliff_mesh.name = "BedrockBase"
 	add_child(cliff_mesh)
@@ -78,7 +78,8 @@ func _build_terrain():
 	terrain_mesh.name = "GrassCap"
 	add_child(terrain_mesh)
 	
-	# Layer 3: If Capital province, build raised central citadel dais (+0.16m)
+	# Capital foundation is embedded flush with the surface. A raised small
+	# dais left satellite yurts floating and the army clipping its edge.
 	if province_data.is_capital:
 		var cap_dais = MeshInstance3D.new()
 		var d_mesh = CylinderMesh.new()
@@ -88,7 +89,7 @@ func _build_terrain():
 		d_mesh.radial_segments = 7
 		cap_dais.mesh = ModelBuilder.flat_mesh(d_mesh)
 		cap_dais.material_override = ModelBuilder.get_mat("rock")
-		cap_dais.position = Vector3(0, 0.18, 0)
+		cap_dais.position = Vector3(0, SURFACE_Y - 0.08, 0)
 		cap_dais.name = "CapitalDais"
 		add_child(cap_dais)
 	
@@ -125,7 +126,7 @@ func _build_settlement():
 		_:
 			settlement_node = ModelBuilder.create_neutral_outpost()
 	
-	var y_offset: float = 0.26 if is_cap else SURFACE_Y
+	var y_offset: float = SURFACE_Y
 	settlement_node.position = Vector3(0, y_offset, 0)
 	settlement_node.name = "Settlement"
 	add_child(settlement_node)
@@ -142,6 +143,8 @@ func _build_decorations():
 		tree_count = 5 # Rus' forest province
 	elif province_id in ["sarai", "kipchak"]:
 		tree_count = 2 # Steppe grasslands
+	elif province_id == "sarkel":
+		tree_count = 0 # Keep the fortified rocky bluff readable.
 	elif province_id in ["tabriz", "bukhara"]:
 		tree_count = 1 # Arid steppe
 		
@@ -163,9 +166,9 @@ func _build_decorations():
 		add_child(tree)
 		
 	# Rocks & Pasture
-	if rng.randf() > 0.4:
+	if province_id == "sarkel" or rng.randf() > 0.4:
 		var rocks = ModelBuilder.create_rock_cluster(rng.randf_range(0.7, 1.0))
-		rocks.position = Vector3(rng.randf_range(-1.1, 1.1), 0.12, rng.randf_range(-1.1, 1.1))
+		rocks.position = Vector3(1.2, SURFACE_Y, -0.6) if province_id == "sarkel" else Vector3(-1.15, SURFACE_Y, -0.65)
 		add_child(rocks)
 		
 	# Low-poly Flower patch
@@ -293,10 +296,10 @@ func _build_interaction_area():
 	collision_area.name = "ClickArea"
 	var col_shape = CollisionShape3D.new()
 	var cyl = CylinderShape3D.new()
-	cyl.radius = 1.75
-	cyl.height = 1.2
+	cyl.radius = 1.70
+	cyl.height = 0.44 + position.y + SURFACE_Y
 	col_shape.shape = cyl
-	col_shape.position = Vector3(0, 0.5, 0)
+	col_shape.position = Vector3(0, SURFACE_Y - cyl.height * 0.5, 0)
 	collision_area.add_child(col_shape)
 	add_child(collision_area)
 	
