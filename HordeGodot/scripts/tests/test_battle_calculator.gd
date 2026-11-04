@@ -2,12 +2,13 @@ extends SceneTree
 
 const Calculator = preload("res://scripts/combat/battle_calculator.gd")
 var checks: int = 0
+var failed: int = 0
 
 func verify(condition: bool, message: String) -> void:
 	checks += 1
 	if not condition:
 		push_error(message)
-		quit(1)
+		failed += 1
 
 func _init() -> void:
 	var calculator := Calculator.new()
@@ -33,5 +34,5 @@ func _init() -> void:
 	var replay: Dictionary = calculator.calculate(army, army, 2, 1.2, 1.1, rng)
 	rng.seed = 42
 	verify(replay == calculator.calculate(army, army, 2, 1.2, 1.1, rng), "Seeded replay")
-	print("Battle calculator: ", checks, " checks passed")
-	quit()
+	print("Battle calculator: ", checks, " checks, failures: ", failed)
+	quit(1 if failed else 0)
