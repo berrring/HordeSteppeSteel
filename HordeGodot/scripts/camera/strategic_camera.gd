@@ -8,6 +8,8 @@ extends Node3D
 @export var default_zoom: float = 14.0
 @export var pitch_angle: float = 54.0
 
+var orthographic_distance: float = 14.0
+
 var camera: Camera3D
 var target_position: Vector3 = Vector3(0, 0, 0)
 var target_zoom: float = 14.0
@@ -44,7 +46,11 @@ func _process(dt: float):
 
 func _update_camera_transform():
 	if camera:
-		camera.position = Vector3(0, 0, current_zoom)
+		if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+			camera.size = current_zoom * 2.0 * tan(deg_to_rad(camera.fov * 0.5))
+			camera.position = Vector3(0, 0, orthographic_distance)
+		else:
+			camera.position = Vector3(0, 0, current_zoom)
 
 func _handle_keyboard_pan(dt: float):
 	if is_dragging:
@@ -70,7 +76,19 @@ func _handle_keyboard_pan(dt: float):
 		target_position.x = clamp(target_position.x, -14.0, 16.0)
 		target_position.z = clamp(target_position.z, -16.0, 14.0)
 
+func toggle_projection() -> void:
+	if camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		orthographic_distance = current_zoom
+		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	else:
+		camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+	_update_camera_transform()
+
 func _unhandled_input(event: InputEvent):
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F10:
+		toggle_projection()
+		get_viewport().set_input_as_handled()
+		return
 	# Mouse Wheel Zoom
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:

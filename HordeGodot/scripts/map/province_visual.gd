@@ -1,6 +1,9 @@
 class_name ProvinceVisual
 extends Node3D
 
+const SURFACE_Y: float = 0.12
+const CHECKPOINT_ELEVATIONS: Dictionary = {"sarai": 0.0, "crossroads": 0.5, "sarkel": 0.3}
+
 const ModelBuilder = preload("res://scripts/visuals/model_builder.gd")
 
 signal clicked(province_id: String)
@@ -23,10 +26,10 @@ var label_3d: Label3D
 var army_label_3d: Label3D
 var collision_area: Area3D
 
-func setup(p_id: String, data: Dictionary):
+func setup(p_id: String, data: Dictionary, elevation: float = 0.0):
 	province_id = p_id
 	province_data = data
-	position = Vector3(data.x, 0, data.z)
+	position = Vector3(data.x, elevation, data.z)
 	
 	_build_terrain()
 	_build_settlement()
@@ -44,7 +47,7 @@ func _build_terrain():
 		mat_name = "forest_grass"
 	elif province_id in ["tabriz", "samarkand", "bukhara"]:
 		mat_name = "arid_steppe"
-	elif province_id in ["karakorum", "shangdu"]:
+	elif province_id in ["karakorum", "shangdu", "sarkel"]:
 		mat_name = "rock"
 	
 	var mat = ModelBuilder.get_mat(mat_name)
@@ -54,11 +57,11 @@ func _build_terrain():
 	var c_mesh = CylinderMesh.new()
 	c_mesh.top_radius = 1.82
 	c_mesh.bottom_radius = 1.96
-	c_mesh.height = 0.44
+	c_mesh.height = 0.44 + position.y
 	c_mesh.radial_segments = 7 # Stylized hex-boardgame faceted silhouette
-	cliff_mesh.mesh = c_mesh
+	cliff_mesh.mesh = ModelBuilder.flat_mesh(c_mesh)
 	cliff_mesh.material_override = ModelBuilder.get_mat("cliff_bedrock")
-	cliff_mesh.position = Vector3(0, -0.22, 0)
+	cliff_mesh.position = Vector3(0, -0.22 - position.y * 0.5, 0)
 	cliff_mesh.name = "BedrockBase"
 	add_child(cliff_mesh)
 	
@@ -69,7 +72,7 @@ func _build_terrain():
 	mesh.bottom_radius = 1.82
 	mesh.height = 0.14
 	mesh.radial_segments = 7
-	terrain_mesh.mesh = mesh
+	terrain_mesh.mesh = ModelBuilder.flat_mesh(mesh)
 	terrain_mesh.material_override = mat
 	terrain_mesh.position = Vector3(0, 0.05, 0)
 	terrain_mesh.name = "GrassCap"
@@ -83,7 +86,7 @@ func _build_terrain():
 		d_mesh.bottom_radius = 1.02
 		d_mesh.height = 0.16
 		d_mesh.radial_segments = 7
-		cap_dais.mesh = d_mesh
+		cap_dais.mesh = ModelBuilder.flat_mesh(d_mesh)
 		cap_dais.material_override = ModelBuilder.get_mat("rock")
 		cap_dais.position = Vector3(0, 0.18, 0)
 		cap_dais.name = "CapitalDais"
@@ -122,7 +125,7 @@ func _build_settlement():
 		_:
 			settlement_node = ModelBuilder.create_neutral_outpost()
 	
-	var y_offset = 0.22 if is_cap else 0.08
+	var y_offset: float = 0.26 if is_cap else SURFACE_Y
 	settlement_node.position = Vector3(0, y_offset, 0)
 	settlement_node.name = "Settlement"
 	add_child(settlement_node)
@@ -216,7 +219,7 @@ func _refresh_army_model():
 	# Determine dominant unit type and faction
 	var main_unit_type = army.units[0].type
 	var faction = army.faction
-	var f_color = Color(0.9, 0.75, 0.22) if faction == "mongol" else Color(0.78, 0.2, 0.2)
+	var f_color: Color = ModelBuilder.GOLD if faction == "mongol" else ModelBuilder.BLUE
 	
 	var unit_fig: Node3D
 	match main_unit_type:
@@ -251,8 +254,8 @@ func _build_labels():
 	label_3d.no_depth_test = true
 	label_3d.font_size = 32
 	label_3d.outline_size = 8
-	label_3d.outline_modulate = Color(0.08, 0.06, 0.04, 1.0)
-	label_3d.modulate = Color(1.0, 0.95, 0.85)
+	label_3d.outline_modulate = ModelBuilder.BLUE
+	label_3d.modulate = ModelBuilder.WHITE
 	add_child(label_3d)
 	
 	# Army badge label
@@ -262,8 +265,8 @@ func _build_labels():
 	army_label_3d.no_depth_test = true
 	army_label_3d.font_size = 28
 	army_label_3d.outline_size = 6
-	army_label_3d.outline_modulate = Color(0.1, 0.0, 0.0, 1.0)
-	army_label_3d.modulate = Color(1.0, 0.85, 0.3)
+	army_label_3d.outline_modulate = ModelBuilder.BLUE
+	army_label_3d.modulate = ModelBuilder.GOLD
 	army_label_3d.visible = false
 	add_child(army_label_3d)
 
@@ -278,9 +281,9 @@ func _build_highlight_ring():
 	
 	var h_mat = StandardMaterial3D.new()
 	h_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	h_mat.albedo_color = Color(1.0, 0.85, 0.2, 0.9)
+	h_mat.albedo_color = ModelBuilder.GOLD
 	highlight_ring.material_override = h_mat
-	highlight_ring.position = Vector3(0, 0.05, 0)
+	highlight_ring.position = Vector3(0, 0.15, 0)
 	highlight_ring.visible = false
 	highlight_ring.name = "HighlightRing"
 	add_child(highlight_ring)
@@ -333,15 +336,15 @@ func update_state():
 		
 	if is_selected:
 		highlight_ring.visible = true
-		mat.albedo_color = Color(1.0, 0.85, 0.1, 1.0) # Radiant Gold selection
+		mat.albedo_color = ModelBuilder.GOLD # Radiant Gold selection
 		highlight_ring.scale = Vector3(1.02, 1.0, 1.02)
 	elif is_targetable:
 		highlight_ring.visible = true
-		mat.albedo_color = Color(0.9, 0.2, 0.15, 0.95) # Crimson Attack Target
+		mat.albedo_color = ModelBuilder.GOLD # Bronze attack target
 		highlight_ring.scale = Vector3(1.0, 1.0, 1.0)
 	elif is_hovered:
 		highlight_ring.visible = true
-		mat.albedo_color = Color(1.0, 1.0, 1.0, 0.6) # Soft white hover
+		mat.albedo_color = ModelBuilder.WHITE # Soft white hover
 		highlight_ring.scale = Vector3(0.98, 1.0, 0.98)
 	else:
 		highlight_ring.visible = false
