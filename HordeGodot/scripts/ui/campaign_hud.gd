@@ -1,7 +1,18 @@
 class_name CampaignHUD
 extends CanvasLayer
 
+## ==============================================================================
+## HORDE: STEPPE & STEEL — CAMPAIGN HUD & THEMED PRESENTATION
+## ==============================================================================
+## Author: Ayaz (Subsystem: Economy Validation & UI Presentation)
+##
+## Integrates EconomyManager stateless validation with dynamic UI updates,
+## theme-driven styling following the official 5-color palette, and
+## authoritative transaction dispatch.
+## ==============================================================================
+
 const Palette = preload("res://scripts/core/palette.gd")
+const EconomyManager = preload("res://scripts/core/economy_manager.gd")
 
 signal end_turn_requested
 signal recruit_requested(unit_type: String)
@@ -45,15 +56,31 @@ var lbl_game_over_details: Label
 var help_modal: PanelContainer
 var event_log_label: Label
 
+# Cached button registries for dynamic economy validation
+var recruit_buttons: Dictionary = {}
+var construct_buttons: Dictionary = {}
+var recruit_tooltips: Dictionary = {}
+
 func _ready():
-	_create_ui()
+	if top_bar == null:
+		_create_ui()
+	_apply_theme()
 	hide_modals()
 	update_resources()
 	deselect_province()
 
 # -------------------------------------------------------------
-# STYLING HELPERS
+# PALETTE & STYLING HELPERS (OFFICIAL 5-COLOR SYSTEM)
 # -------------------------------------------------------------
+func _apply_theme():
+	var theme_path = "res://assets/theme/game_theme.tres"
+	if ResourceLoader.exists(theme_path):
+		var custom_theme = load(theme_path) as Theme
+		if custom_theme:
+			for child in get_children():
+				if child is Control:
+					child.theme = custom_theme
+
 func _create_stylebox(bg_color: Color, border_color: Color = Color(0,0,0,0), border_w: int = 0, corner_r: int = 4) -> StyleBoxFlat:
 	var sb = StyleBoxFlat.new()
 	sb.bg_color = bg_color
@@ -67,13 +94,88 @@ func _create_stylebox(bg_color: Color, border_color: Color = Color(0,0,0,0), bor
 	sb.content_margin_bottom = 8
 	return sb
 
+func _create_panel_stylebox() -> StyleBoxFlat:
+	# Panels: Deep Steel Blue (#2B3A4A) with 2px Bronze Gold border (#DAA520) and 4px corner radius
+	return _create_stylebox(Palette.DEEP_STEEL_BLUE, Palette.BRONZE_GOLD, 2, 4)
+
+func _create_tactical_button_style(state: String) -> StyleBoxFlat:
+	# Tactical Buttons (Recruit/Build): Wood Brown (#5C4033)
+	var sb = StyleBoxFlat.new()
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	
+	match state:
+		"normal":
+			sb.bg_color = Palette.WOOD_BROWN
+			sb.border_color = Palette.BRONZE_GOLD
+			sb.set_border_width_all(1)
+		"hover":
+			sb.bg_color = Palette.WOOD_BROWN.lightened(0.15)
+			sb.border_color = Palette.BRONZE_GOLD.lightened(0.25)
+			sb.set_border_width_all(1)
+		"pressed":
+			sb.bg_color = Palette.WOOD_BROWN.darkened(0.15)
+			sb.border_color = Palette.BRONZE_GOLD
+			sb.set_border_width_all(1)
+		"disabled":
+			# Disabled Elements: Controlled alpha (0.40) and dimmed text
+			sb.bg_color = Color(Palette.WOOD_BROWN.r, Palette.WOOD_BROWN.g, Palette.WOOD_BROWN.b, 0.40)
+			sb.border_color = Color(Palette.BRONZE_GOLD.r, Palette.BRONZE_GOLD.g, Palette.BRONZE_GOLD.b, 0.30)
+			sb.set_border_width_all(1)
+	return sb
+
+func _create_primary_button_style(state: String) -> StyleBoxFlat:
+	# Primary Buttons (End Turn): Steppe Green (#6B8E23)
+	var sb = StyleBoxFlat.new()
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	
+	match state:
+		"normal":
+			sb.bg_color = Palette.STEPPE_GREEN
+			sb.border_color = Palette.BRONZE_GOLD
+			sb.set_border_width_all(2)
+		"hover":
+			sb.bg_color = Palette.STEPPE_GREEN.lightened(0.15)
+			sb.border_color = Palette.BRONZE_GOLD.lightened(0.25)
+			sb.set_border_width_all(2)
+		"pressed":
+			sb.bg_color = Palette.STEPPE_GREEN.darkened(0.15)
+			sb.border_color = Palette.BRONZE_GOLD
+			sb.set_border_width_all(2)
+		"disabled":
+			sb.bg_color = Color(Palette.STEPPE_GREEN.r, Palette.STEPPE_GREEN.g, Palette.STEPPE_GREEN.b, 0.40)
+			sb.border_color = Color(Palette.BRONZE_GOLD.r, Palette.BRONZE_GOLD.g, Palette.BRONZE_GOLD.b, 0.30)
+			sb.set_border_width_all(1)
+	return sb
+
+func _style_tactical_button(btn: Button):
+	btn.add_theme_stylebox_override("normal", _create_tactical_button_style("normal"))
+	btn.add_theme_stylebox_override("hover", _create_tactical_button_style("hover"))
+	btn.add_theme_stylebox_override("pressed", _create_tactical_button_style("pressed"))
+	btn.add_theme_stylebox_override("disabled", _create_tactical_button_style("disabled"))
+	btn.add_theme_stylebox_override("focus", _create_tactical_button_style("hover"))
+	btn.add_theme_color_override("font_color", Palette.SNOW_WHITE)
+	btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	btn.add_theme_color_override("font_pressed_color", Palette.BRONZE_GOLD)
+	btn.add_theme_color_override("font_disabled_color", Color(Palette.SNOW_WHITE.r, Palette.SNOW_WHITE.g, Palette.SNOW_WHITE.b, 0.40))
+
+# -------------------------------------------------------------
+# UI CONSTRUCTION
+# -------------------------------------------------------------
 func _create_ui():
 	# Top Bar
 	top_bar = PanelContainer.new()
 	top_bar.name = "TopBar"
 	top_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	top_bar.offset_bottom = 54
-	top_bar.add_theme_stylebox_override("panel", _create_stylebox(Color(0.12, 0.10, 0.08, 0.94), Color(0.72, 0.58, 0.28), 2, 0))
+	top_bar.add_theme_stylebox_override("panel", _create_panel_stylebox())
 	add_child(top_bar)
 	
 	var top_hbox = HBoxContainer.new()
@@ -83,7 +185,7 @@ func _create_ui():
 	
 	lbl_faction = Label.new()
 	lbl_faction.text = "🐎 THE GOLDEN HORDE"
-	lbl_faction.add_theme_color_override("font_color", Color(1.0, 0.86, 0.35))
+	lbl_faction.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 	lbl_faction.add_theme_font_size_override("font_size", 18)
 	top_hbox.add_child(lbl_faction)
 	
@@ -102,28 +204,28 @@ func _create_ui():
 	lbl_gold.text = "💰 500g (+150)"
 	lbl_gold.tooltip_text = "Treasury: Accumulates each turn from province taxes.\nUsed to recruit warriors and maintain troops."
 	lbl_gold.mouse_filter = Control.MOUSE_FILTER_PASS
-	lbl_gold.add_theme_color_override("font_color", Color(1.0, 0.88, 0.4))
+	lbl_gold.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 	top_hbox.add_child(lbl_gold)
 	
 	lbl_food = Label.new()
 	lbl_food.text = "🌾 300f (+100)"
 	lbl_food.tooltip_text = "Grain & Pasture: Sustains armies.\nRequired alongside Gold to recruit new squads."
 	lbl_food.mouse_filter = Control.MOUSE_FILTER_PASS
-	lbl_food.add_theme_color_override("font_color", Color(0.75, 0.95, 0.55))
+	lbl_food.add_theme_color_override("font_color", Palette.STEPPE_GREEN.lightened(0.2))
 	top_hbox.add_child(lbl_food)
 	
 	lbl_wood = Label.new()
 	lbl_wood.text = "🪵 200w (+50)"
 	lbl_wood.tooltip_text = "Timber Reserves: Harvested from forests.\nUsed to build defensive stockades, pastures, and markets."
 	lbl_wood.mouse_filter = Control.MOUSE_FILTER_PASS
-	lbl_wood.add_theme_color_override("font_color", Color(0.95, 0.78, 0.55))
+	lbl_wood.add_theme_color_override("font_color", Palette.WOOD_BROWN.lightened(0.45))
 	top_hbox.add_child(lbl_wood)
 	
 	lbl_provinces = Label.new()
 	lbl_provinces.text = "🏛 Prov: 2 / 10"
-	lbl_provinces.tooltip_text = "Territories Controlled: Conquer 10 provinces across Eurasia to achieve total victory."
+	lbl_provinces.tooltip_text = "Territories Controlled: Conquer provinces across Eurasia to achieve total victory."
 	lbl_provinces.mouse_filter = Control.MOUSE_FILTER_PASS
-	lbl_provinces.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
+	lbl_provinces.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	top_hbox.add_child(lbl_provinces)
 	
 	# Spacer
@@ -133,25 +235,25 @@ func _create_ui():
 	
 	var btn_help = Button.new()
 	btn_help.text = "Help / Keys"
-	btn_help.add_theme_stylebox_override("normal", _create_stylebox(Color(0.24, 0.20, 0.16), Color(0.6, 0.5, 0.3), 1, 4))
+	_style_tactical_button(btn_help)
 	btn_help.pressed.connect(_on_help_pressed)
 	top_hbox.add_child(btn_help)
 	
 	var btn_save = Button.new()
 	btn_save.text = "Save"
-	btn_save.add_theme_stylebox_override("normal", _create_stylebox(Color(0.24, 0.20, 0.16), Color(0.6, 0.5, 0.3), 1, 4))
+	_style_tactical_button(btn_save)
 	btn_save.pressed.connect(_on_save_pressed)
 	top_hbox.add_child(btn_save)
 	
 	var btn_load = Button.new()
 	btn_load.text = "Load"
-	btn_load.add_theme_stylebox_override("normal", _create_stylebox(Color(0.24, 0.20, 0.16), Color(0.6, 0.5, 0.3), 1, 4))
+	_style_tactical_button(btn_load)
 	btn_load.pressed.connect(_on_load_pressed)
 	top_hbox.add_child(btn_load)
 	
 	var btn_menu = Button.new()
 	btn_menu.text = "Menu"
-	btn_menu.add_theme_stylebox_override("normal", _create_stylebox(Color(0.35, 0.15, 0.15), Color(0.8, 0.3, 0.3), 1, 4))
+	_style_tactical_button(btn_menu)
 	btn_menu.pressed.connect(_on_menu_pressed)
 	top_hbox.add_child(btn_menu)
 	
@@ -160,9 +262,9 @@ func _create_ui():
 	left_panel.name = "LeftPanel"
 	left_panel.offset_left = 18
 	left_panel.offset_top = 70
-	left_panel.offset_right = 340
+	left_panel.offset_right = 350
 	left_panel.offset_bottom = 690
-	left_panel.add_theme_stylebox_override("panel", _create_stylebox(Color(0.12, 0.10, 0.08, 0.92), Color(0.72, 0.58, 0.28), 2, 6))
+	left_panel.add_theme_stylebox_override("panel", _create_panel_stylebox())
 	add_child(left_panel)
 	
 	var left_scroll = ScrollContainer.new()
@@ -177,12 +279,13 @@ func _create_ui():
 	lbl_province_name = Label.new()
 	lbl_province_name.text = "Province Name"
 	lbl_province_name.add_theme_font_size_override("font_size", 20)
-	lbl_province_name.add_theme_color_override("font_color", Color(1.0, 0.88, 0.4))
+	lbl_province_name.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 	left_vbox.add_child(lbl_province_name)
 	
 	lbl_province_details = Label.new()
 	lbl_province_details.text = "Details...\nIncome..."
 	lbl_province_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl_province_details.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	left_vbox.add_child(lbl_province_details)
 	
 	var hs1 = HSeparator.new()
@@ -191,7 +294,7 @@ func _create_ui():
 	# Garrison / Army section
 	var lbl_army_header = Label.new()
 	lbl_army_header.text = "Garrison / Troops:"
-	lbl_army_header.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	lbl_army_header.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 	left_vbox.add_child(lbl_army_header)
 	
 	army_list_container = VBoxContainer.new()
@@ -207,12 +310,15 @@ func _create_ui():
 	
 	lbl_attack_info = Label.new()
 	lbl_attack_info.text = "Attack Neighbor?"
-	lbl_attack_info.add_theme_color_override("font_color", Color(1.0, 0.4, 0.35))
+	lbl_attack_info.add_theme_color_override("font_color", Color(1.0, 0.45, 0.35))
 	attack_container.add_child(lbl_attack_info)
 	
 	var btn_confirm_attack = Button.new()
 	btn_confirm_attack.text = "⚔ LAUNCH ATTACK"
-	btn_confirm_attack.add_theme_stylebox_override("normal", _create_stylebox(Color(0.55, 0.15, 0.12), Color(0.9, 0.3, 0.2), 2, 4))
+	btn_confirm_attack.add_theme_stylebox_override("normal", _create_stylebox(Color(0.55, 0.15, 0.12), Palette.BRONZE_GOLD, 2, 4))
+	btn_confirm_attack.add_theme_stylebox_override("hover", _create_stylebox(Color(0.70, 0.20, 0.15), Palette.BRONZE_GOLD.lightened(0.2), 2, 4))
+	btn_confirm_attack.add_theme_stylebox_override("pressed", _create_stylebox(Color(0.40, 0.10, 0.08), Palette.BRONZE_GOLD, 2, 4))
+	btn_confirm_attack.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	btn_confirm_attack.pressed.connect(_on_confirm_attack_pressed)
 	attack_container.add_child(btn_confirm_attack)
 	
@@ -225,7 +331,7 @@ func _create_ui():
 	
 	var lbl_rec_header = Label.new()
 	lbl_rec_header.text = "Recruit Units:"
-	lbl_rec_header.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	lbl_rec_header.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 	recruit_container.add_child(lbl_rec_header)
 	
 	var units_to_recruit = [
@@ -236,88 +342,103 @@ func _create_ui():
 		{"type": "spearman", "label": "Spearman (110g, 35f)", "tip": "Pike wall infantry.\nAtk: 45 | Def: 55 | Range: 1 | Move: 1\nCounters cavalry charges."},
 		{"type": "siege", "label": "Siege Engine (300g, 20f)", "tip": "Traction trebuchet.\nAtk: 70 | Def: 10 | Range: 3 | Move: 1\nLong-range bombardment vs fortifications."},
 	]
+	
+	recruit_buttons.clear()
+	recruit_tooltips.clear()
 	for u in units_to_recruit:
 		var btn = Button.new()
 		btn.text = u.label
 		btn.tooltip_text = u.tip
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.add_theme_stylebox_override("normal", _create_stylebox(Color(0.20, 0.25, 0.18), Color(0.4, 0.6, 0.3), 1, 4))
-		var utype = u.type
+		_style_tactical_button(btn)
+		
+		var utype: String = u.type
+		recruit_buttons[utype] = btn
+		recruit_tooltips[utype] = u.tip
+		
 		btn.pressed.connect(func():
-			_play_click()
-			recruit_requested.emit(utype)
+			_on_recruit_button_clicked(utype)
 		)
 		recruit_container.add_child(btn)
 		
 	var hs3 = HSeparator.new()
 	left_vbox.add_child(hs3)
 	
-	# Construct section
+	# Construct section (All 7 canonical buildings from campaign_controller.gd)
 	construct_container = VBoxContainer.new()
 	left_vbox.add_child(construct_container)
 	
 	var lbl_con_header = Label.new()
 	lbl_con_header.text = "Construct Buildings:"
-	lbl_con_header.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	lbl_con_header.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 	construct_container.add_child(lbl_con_header)
 	
 	var buildings = [
-		{"type": "town_center", "label": "Town Center (+40g, +20f | 120w)", "tip": "Primary settlement center.\nYields +40 Gold and +20 Food per turn.\nCost: 120 Wood"},
-		{"type": "barracks", "label": "Barracks (+15 Def | 100w)", "tip": "Drill grounds and armory.\nFortifies defenses (+15) and unlocks infantry recruitment.\nCost: 100 Wood"},
-		{"type": "stables", "label": "Stables (+40 Food | 80w)", "tip": "Horse breeding paddocks.\nProduces +40 Food per turn and supports cavalry recruitment.\nCost: 80 Wood"},
-		{"type": "fortification", "label": "Fortifications (+20 Def | 100w)", "tip": "Log ramparts and watchtowers.\nGrants +20 defense bonus to garrisons.\nCost: 100 Wood"},
-		{"type": "palisade", "label": "Palisade (+10 Def | 80w)", "tip": "Timber stockade rampart.\nGrants +10 defense bonus to defending garrison forces.\nCost: 80 Wood"},
+		{"type": "town_center", "base_label": "Town Center (+40g, +20f | 120w)"},
+		{"type": "barracks", "base_label": "Barracks (+15 Def | 100w)"},
+		{"type": "stables", "base_label": "Stables (+40 Food | 80w)"},
+		{"type": "fortification", "base_label": "Fortifications (+20 Def | 100w)"},
+		{"type": "palisade", "base_label": "Palisade (+10 Def | 80w)"},
+		{"type": "pasture", "base_label": "Pasture (+40 Food | 80w)"},
+		{"type": "market", "base_label": "Market (+50 Gold | 120w)"},
 	]
+	
+	construct_buttons.clear()
 	for b in buildings:
 		var btn = Button.new()
-		btn.text = b.label
-		btn.tooltip_text = b.tip
+		btn.text = b.base_label
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.add_theme_stylebox_override("normal", _create_stylebox(Color(0.24, 0.20, 0.16), Color(0.65, 0.5, 0.3), 1, 4))
-		var btype = b.type
+		_style_tactical_button(btn)
+		
+		var btype: String = b.type
+		construct_buttons[btype] = btn
+		
 		btn.pressed.connect(func():
-			_play_click()
-			construct_requested.emit(btype)
+			_on_construct_button_clicked(btype)
 		)
 		construct_container.add_child(btn)
 		
-	# Right Panel: End Turn
+	# Right Panel: Primary Action Button (End Turn)
 	right_panel = PanelContainer.new()
 	right_panel.name = "RightPanel"
 	right_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	right_panel.offset_left = -220
+	right_panel.offset_left = -230
 	right_panel.offset_top = -90
 	right_panel.offset_right = -20
 	right_panel.offset_bottom = -20
-	right_panel.add_theme_stylebox_override("panel", _create_stylebox(Color(0.12, 0.10, 0.08, 0.94), Color(0.72, 0.58, 0.28), 2, 6))
+	right_panel.add_theme_stylebox_override("panel", _create_panel_stylebox())
 	add_child(right_panel)
 	
+	# Primary Button (End Turn): Steppe Green (#6B8E23)
 	btn_end_turn = Button.new()
 	btn_end_turn.text = "⚔ END TURN"
 	btn_end_turn.add_theme_font_size_override("font_size", 22)
-	btn_end_turn.add_theme_color_override("font_color", Color(1.0, 0.92, 0.5))
-	btn_end_turn.add_theme_stylebox_override("normal", _create_stylebox(Color(0.42, 0.28, 0.12), Color(0.92, 0.75, 0.28), 2, 6))
-	btn_end_turn.add_theme_stylebox_override("hover", _create_stylebox(Color(0.55, 0.38, 0.18), Color(1.0, 0.88, 0.4), 2, 6))
-	btn_end_turn.pressed.connect(func(): end_turn_requested.emit())
+	btn_end_turn.add_theme_color_override("font_color", Palette.SNOW_WHITE)
+	btn_end_turn.add_theme_color_override("font_hover_color", Color.WHITE)
+	btn_end_turn.add_theme_color_override("font_pressed_color", Palette.BRONZE_GOLD)
+	btn_end_turn.add_theme_stylebox_override("normal", _create_primary_button_style("normal"))
+	btn_end_turn.add_theme_stylebox_override("hover", _create_primary_button_style("hover"))
+	btn_end_turn.add_theme_stylebox_override("pressed", _create_primary_button_style("pressed"))
+	btn_end_turn.add_theme_stylebox_override("disabled", _create_primary_button_style("disabled"))
+	btn_end_turn.pressed.connect(func():
+		_play_click()
+		end_turn_requested.emit()
+	)
 	right_panel.add_child(btn_end_turn)
 	
-	# Event Log Label (bottom left above ground)
+	# Event Log Label
 	event_log_label = Label.new()
 	event_log_label.offset_left = 360
 	event_log_label.offset_top = 660
 	event_log_label.offset_right = 1000
 	event_log_label.offset_bottom = 705
-	event_log_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.75))
+	event_log_label.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	event_log_label.text = "Campaign initialized. Lead the Horde to victory across the steppe!"
 	add_child(event_log_label)
 	
-	# Battle Modal
+	# Modals styled with Deep Steel Blue and Bronze Gold
 	_create_battle_modal()
-	
-	# Game Over Modal
 	_create_game_over_modal()
-	
-	# Help Modal
 	_create_help_modal()
 
 func _create_battle_modal():
@@ -328,7 +449,7 @@ func _create_battle_modal():
 	battle_modal.offset_top = -180
 	battle_modal.offset_right = 280
 	battle_modal.offset_bottom = 180
-	battle_modal.add_theme_stylebox_override("panel", _create_stylebox(Color(0.12, 0.08, 0.06, 0.98), Color(0.9, 0.3, 0.2), 3, 8))
+	battle_modal.add_theme_stylebox_override("panel", _create_panel_stylebox())
 	add_child(battle_modal)
 	
 	var vbox = VBoxContainer.new()
@@ -340,19 +461,23 @@ func _create_battle_modal():
 	lbl_battle_title.text = "BATTLE REPORT"
 	lbl_battle_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_battle_title.add_theme_font_size_override("font_size", 26)
-	lbl_battle_title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	lbl_battle_title.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 	vbox.add_child(lbl_battle_title)
 	
 	lbl_battle_details = Label.new()
 	lbl_battle_details.text = "Combat results..."
 	lbl_battle_details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_battle_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl_battle_details.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	vbox.add_child(lbl_battle_details)
 	
 	var btn_close = Button.new()
 	btn_close.text = "Continue Campaign"
-	btn_close.add_theme_stylebox_override("normal", _create_stylebox(Color(0.25, 0.35, 0.2), Color(0.6, 0.8, 0.4), 2, 6))
-	btn_close.pressed.connect(func(): battle_modal.visible = false)
+	_style_tactical_button(btn_close)
+	btn_close.pressed.connect(func():
+		_play_click()
+		battle_modal.visible = false
+	)
 	vbox.add_child(btn_close)
 
 func _create_game_over_modal():
@@ -363,7 +488,7 @@ func _create_game_over_modal():
 	game_over_modal.offset_top = -190
 	game_over_modal.offset_right = 300
 	game_over_modal.offset_bottom = 190
-	game_over_modal.add_theme_stylebox_override("panel", _create_stylebox(Color(0.1, 0.08, 0.06, 0.98), Color(1.0, 0.84, 0.25), 3, 8))
+	game_over_modal.add_theme_stylebox_override("panel", _create_panel_stylebox())
 	add_child(game_over_modal)
 	
 	var vbox = VBoxContainer.new()
@@ -375,20 +500,24 @@ func _create_game_over_modal():
 	lbl_game_over_title.text = "VICTORY!"
 	lbl_game_over_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_game_over_title.add_theme_font_size_override("font_size", 32)
-	lbl_game_over_title.add_theme_color_override("font_color", Color(1.0, 0.88, 0.35))
+	lbl_game_over_title.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 	vbox.add_child(lbl_game_over_title)
 	
 	lbl_game_over_details = Label.new()
 	lbl_game_over_details.text = "The Steppe bows before your might."
 	lbl_game_over_details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_game_over_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl_game_over_details.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	vbox.add_child(lbl_game_over_details)
 	
 	var btn_menu = Button.new()
 	btn_menu.text = "Return to Main Menu"
 	btn_menu.add_theme_font_size_override("font_size", 20)
-	btn_menu.add_theme_stylebox_override("normal", _create_stylebox(Color(0.35, 0.25, 0.15), Color(0.9, 0.75, 0.3), 2, 6))
-	btn_menu.pressed.connect(func(): return_to_menu_requested.emit())
+	_style_tactical_button(btn_menu)
+	btn_menu.pressed.connect(func():
+		_play_click()
+		return_to_menu_requested.emit()
+	)
 	vbox.add_child(btn_menu)
 
 func _create_help_modal():
@@ -399,7 +528,7 @@ func _create_help_modal():
 	help_modal.offset_top = -240
 	help_modal.offset_right = 260
 	help_modal.offset_bottom = 240
-	help_modal.add_theme_stylebox_override("panel", _create_stylebox(Color(0.12, 0.10, 0.08, 0.98), Color(0.72, 0.58, 0.28), 2, 8))
+	help_modal.add_theme_stylebox_override("panel", _create_panel_stylebox())
 	add_child(help_modal)
 	
 	var vbox = VBoxContainer.new()
@@ -410,7 +539,7 @@ func _create_help_modal():
 	title.text = "PAUSE & STRATEGIC SETTINGS"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 20)
-	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	title.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 	vbox.add_child(title)
 	
 	# Audio Volume Controls
@@ -418,6 +547,7 @@ func _create_help_modal():
 	
 	var lbl_m = Label.new()
 	lbl_m.text = "Master Volume"
+	lbl_m.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	vbox.add_child(lbl_m)
 	var s_m = HSlider.new()
 	s_m.min_value = 0.0
@@ -429,6 +559,7 @@ func _create_help_modal():
 	
 	var lbl_mus = Label.new()
 	lbl_mus.text = "Music Volume"
+	lbl_mus.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	vbox.add_child(lbl_mus)
 	var s_mus = HSlider.new()
 	s_mus.min_value = 0.0
@@ -440,6 +571,7 @@ func _create_help_modal():
 	
 	var lbl_s = Label.new()
 	lbl_s.text = "SFX Volume"
+	lbl_s.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	vbox.add_child(lbl_s)
 	var s_s = HSlider.new()
 	s_s.min_value = 0.0
@@ -451,6 +583,7 @@ func _create_help_modal():
 	
 	var btn_fs = CheckButton.new()
 	btn_fs.text = "Fullscreen Mode"
+	btn_fs.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	btn_fs.button_pressed = (DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN or DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN)
 	btn_fs.toggled.connect(func(pressed):
 		if pressed:
@@ -464,9 +597,9 @@ func _create_help_modal():
 	vbox.add_child(hs)
 	
 	var text = Label.new()
-	text.text = "Controls:\n• WASD / Right-Drag: Pan Camera | Scroll: Zoom\n• Left-Click: Select Province or Attack Target\n• ESC: Toggle Pause Menu"
+	text.text = "Controls:\n• WASD / Right-Drag: Pan Camera | Scroll: Zoom\n• Left-Click: Select Province or Attack Target\n• ESC: Toggle Pause Menu\n• F10: Switch Camera Projection"
 	text.add_theme_font_size_override("font_size", 13)
-	text.add_theme_color_override("font_color", Color(0.85, 0.8, 0.7))
+	text.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 	vbox.add_child(text)
 	
 	var btn_hbox = HBoxContainer.new()
@@ -476,6 +609,7 @@ func _create_help_modal():
 	var btn_ok = Button.new()
 	btn_ok.text = "Resume Game"
 	btn_ok.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_tactical_button(btn_ok)
 	btn_ok.pressed.connect(func():
 		_play_click()
 		help_modal.visible = false
@@ -485,12 +619,124 @@ func _create_help_modal():
 	var btn_menu_quit = Button.new()
 	btn_menu_quit.text = "Main Menu"
 	btn_menu_quit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_tactical_button(btn_menu_quit)
 	btn_menu_quit.pressed.connect(func():
 		_play_click()
 		return_to_menu_requested.emit()
 	)
 	btn_hbox.add_child(btn_menu_quit)
 
+# -------------------------------------------------------------
+# DYNAMIC ECONOMY VALIDATION & ACTIONS UPDATE
+# -------------------------------------------------------------
+func update_actions_state():
+	if top_bar == null:
+		_ready()
+	var gm = _get_game_manager()
+	if gm == null:
+		return
+		
+	var player = gm.get_player_faction()
+	var p = gm.provinces.get(selected_pid, null) if selected_pid != "" else null
+	var is_player = (p != null and p.owner == gm.current_faction)
+	
+	# Update construction buttons dynamically
+	for btype in construct_buttons:
+		var btn: Button = construct_buttons[btype]
+		var b_data = EconomyManager.get_building_data(btype)
+		var b_name: String = b_data.get("name", btype.capitalize())
+		var wood_cost: int = b_data.get("wood_cost", 0)
+		var b_desc: String = b_data.get("description", "")
+		
+		if not is_player or p == null:
+			btn.disabled = true
+			btn.text = "%s (%dw)" % [b_name, wood_cost]
+			btn.tooltip_text = "%s\nCost: %d Wood\nSelect your province to construct." % [b_desc, wood_cost]
+			continue
+			
+		var existing_buildings = p.get("buildings", [])
+		if btype in existing_buildings:
+			btn.disabled = true
+			btn.text = "✔ %s [BUILT]" % b_name
+			btn.tooltip_text = "%s\nStatus: Already built in %s.\nUniqueness strictly enforced (limit 1 per province)." % [
+				b_desc, p.name
+			]
+		else:
+			var validation = EconomyManager.can_build(p, player, btype)
+			if validation.allowed:
+				btn.disabled = false
+				btn.text = "%s (%dw)" % [b_name, wood_cost]
+				btn.tooltip_text = "%s\nCost: %d Wood (Treasury: %d Wood)\nClick to construct." % [
+					b_desc, wood_cost, player.get("wood", 0)
+				]
+			else:
+				btn.disabled = true
+				btn.text = "%s (%dw)" % [b_name, wood_cost]
+				btn.tooltip_text = "%s\nCost: %d Wood (Treasury: %d Wood)\nDisabled: %s" % [
+					b_desc, wood_cost, player.get("wood", 0), validation.reason
+				]
+				
+	# Update recruitment buttons dynamically
+	for utype in recruit_buttons:
+		var btn: Button = recruit_buttons[utype]
+		var u_stats = gm.get_unit_stats(utype)
+		var cost_gold: int = int(u_stats.get("cost_gold", 0))
+		var cost_food: int = int(u_stats.get("cost_food", 0))
+		var base_tip: String = recruit_tooltips.get(utype, "")
+		var unit_name: String = utype.replace("_", " ").capitalize()
+		
+		if not is_player or p == null:
+			btn.disabled = true
+			btn.tooltip_text = "%s\nCost: %dg, %df\nSelect your province to recruit." % [base_tip, cost_gold, cost_food]
+			continue
+			
+		var validation = EconomyManager.can_recruit(player, u_stats)
+		if validation.allowed:
+			btn.disabled = false
+			btn.tooltip_text = "%s\nCost: %dg, %df (Treasury: %dg, %df)\nClick to recruit 50 warriors." % [
+				base_tip, cost_gold, cost_food, player.get("gold", 0), player.get("food", 0)
+			]
+		else:
+			btn.disabled = true
+			btn.tooltip_text = "%s\nCost: %dg, %df (Treasury: %dg, %df)\nDisabled: %s" % [
+				base_tip, cost_gold, cost_food, player.get("gold", 0), player.get("food", 0), validation.reason
+			]
+
+func _on_construct_button_clicked(building_type: String):
+	var gm = _get_game_manager()
+	if gm == null or selected_pid == "":
+		return
+		
+	var p = gm.provinces.get(selected_pid, null)
+	var player = gm.get_player_faction()
+	var validation = EconomyManager.can_build(p, player, building_type)
+	if not validation.allowed:
+		_play_click()
+		log_event("Cannot construct %s: %s" % [building_type, validation.reason])
+		return
+		
+	_play_click()
+	construct_requested.emit(building_type)
+
+func _on_recruit_button_clicked(unit_type: String):
+	var gm = _get_game_manager()
+	if gm == null or selected_pid == "":
+		return
+		
+	var player = gm.get_player_faction()
+	var u_stats = gm.get_unit_stats(unit_type)
+	var validation = EconomyManager.can_recruit(player, u_stats)
+	if not validation.allowed:
+		_play_click()
+		log_event("Cannot recruit %s: %s" % [unit_type.replace("_", " "), validation.reason])
+		return
+		
+	_play_click()
+	recruit_requested.emit(unit_type)
+
+# -------------------------------------------------------------
+# EVENT HANDLING & CONTROLLER INTEGRATION
+# -------------------------------------------------------------
 func _unhandled_input(event: InputEvent):
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		help_modal.visible = not help_modal.visible
@@ -513,6 +759,8 @@ func hide_modals():
 	help_modal.visible = false
 
 func update_resources():
+	if top_bar == null:
+		_ready()
 	var gm = _get_game_manager()
 	if gm == null:
 		return
@@ -550,8 +798,12 @@ func update_resources():
 		else:
 			lbl_act.text = "⚔ ACT I: SETUP"
 			lbl_act.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
+			
+	update_actions_state()
 
 func select_province(pid: String):
+	if top_bar == null:
+		_ready()
 	selected_pid = pid
 	attack_target_pid = ""
 	attack_container.visible = false
@@ -585,17 +837,19 @@ func select_province(pid: String):
 			var u_lbl = Label.new()
 			var name_str = u.type.replace("_", " ").capitalize()
 			u_lbl.text = "• %s: %d warriors" % [name_str, u.count]
-			u_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.75))
+			u_lbl.add_theme_color_override("font_color", Palette.SNOW_WHITE)
 			army_list_container.add_child(u_lbl)
 	else:
 		var empty_lbl = Label.new()
 		empty_lbl.text = "No garrison present."
-		empty_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		empty_lbl.add_theme_color_override("font_color", Color(Palette.SNOW_WHITE.r, Palette.SNOW_WHITE.g, Palette.SNOW_WHITE.b, 0.50))
 		army_list_container.add_child(empty_lbl)
 		
 	# Show/hide recruit & construct only for player-owned
 	recruit_container.visible = is_player
 	construct_container.visible = is_player
+	
+	update_actions_state()
 
 func prompt_attack(attacker_id: String, defender_id: String):
 	selected_pid = attacker_id
@@ -630,7 +884,7 @@ func show_battle_result(res: Dictionary, attacker_pid: String, defender_pid: Str
 	
 	if res.winner == "attacker":
 		lbl_battle_title.text = "⚔ VICTORY IN %s!" % def_name.to_upper()
-		lbl_battle_title.add_theme_color_override("font_color", Color(0.4, 0.95, 0.4))
+		lbl_battle_title.add_theme_color_override("font_color", Palette.STEPPE_GREEN.lightened(0.2))
 		lbl_battle_details.text = "Your forces broke the defenders and seized control of %s!\nThe territory now swears fealty to the Golden Horde." % def_name
 		log_event("Victory! Captured %s!" % def_name)
 	else:
@@ -645,7 +899,7 @@ func show_battle_result(res: Dictionary, attacker_pid: String, defender_pid: Str
 func show_game_over(is_victory: bool):
 	if is_victory:
 		lbl_game_over_title.text = "👑 VICTORY OVER EURASIA!"
-		lbl_game_over_title.add_theme_color_override("font_color", Color(1.0, 0.88, 0.25))
+		lbl_game_over_title.add_theme_color_override("font_color", Palette.BRONZE_GOLD)
 		lbl_game_over_details.text = "The Golden Horde reigns supreme from the Danube to the Altai!\nYour rivals have yielded or been driven from history."
 	else:
 		lbl_game_over_title.text = "DEFEAT — THE HORDE COLLAPSES"
@@ -681,8 +935,16 @@ func _on_load_pressed():
 func _on_menu_pressed():
 	return_to_menu_requested.emit()
 
+var game_manager_ref = null
+
 func _get_game_manager():
-	var root = Engine.get_main_loop().root if Engine.get_main_loop() else null
-	if root and root.has_node("GameManager"):
-		return root.get_node("GameManager")
+	if game_manager_ref != null:
+		return game_manager_ref
+	if is_inside_tree() and get_tree() and get_tree().root and get_tree().root.has_node("GameManager"):
+		return get_tree().root.get_node("GameManager")
+	if get_parent() and get_parent().has_node("GameManager"):
+		return get_parent().get_node("GameManager")
+	var loop = Engine.get_main_loop() as SceneTree
+	if loop and loop.root and loop.root.has_node("GameManager"):
+		return loop.root.get_node("GameManager")
 	return null
