@@ -43,9 +43,18 @@ Or open the `HordeGodot/project.godot` file inside the Godot 4 Editor.
 
 ### Running Godot Tests
 ```powershell
-godot --headless --path HordeGodot --script res://scripts/tests/test_godot_gameplay.gd
+godot --headless --path HordeGodot -s scripts/tests/test_godot_gameplay.gd
+godot --headless --path HordeGodot -s scripts/tests/test_economy_validation.gd
 ```
-*(75/75 tests passing)*
+*(All 87/87 verification tests and 20/20 economy validation tests passing)*
+
+---
+
+## 👥 Team Arsenal & Subsystems
+- **Aziret (`berrring`)** — Core Architecture Lead (authoritative campaign state, scenario isolation, save/load compatibility).
+- **Ayaz (`ayzsw`)** — Economy Validation & UI (stateless `EconomyManager`, themed `CampaignHUD`, 5-color palette design).
+- **Iskender (`Zeckd`)** — Combat Mathematics & Strategic AI (`BattleCalculator`, tactical battle resolution, Rus counterattack).
+- **Alen (`alen`)** — Map, Camera & Visual Blockout (dual-mode F10 camera projection, terrain elevations, 3D models).
 
 ---
 
