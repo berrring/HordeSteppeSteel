@@ -33,5 +33,30 @@ function B.moveRange(s,unit)
     if cost<=unit.mp and not t.unit and (not best[t.id] or cost<best[t.id]) then
      best[t.id]=cost;previous[t.id]=p.id
      table.insert(open,{id=t.id,cost=cost})
+    end
+   end
+  end
+ end
+ best[unit.tile]=nil
+ return best,previous
+end
+function B.generate(n,seed)
+ assert(C.Sizes[n],"Unsupported map size")
+ local rng=Random.new(seed)
+ local s={size=n,seed=seed,tiles={},order={},cities={},cityOrder={}}
+ local mid=math.floor(n/2)
+ local function terrain(q,r)
+  local x=rng:NextNumber()
+  local river=mid+math.floor(math.sin(r*.57)*1.55)
+  if q==river then
+   if r==mid or r==2 or r==n-3 then return "Ford" end
+   return "Water"
+  end
+  if r==mid or r==2 or r==n-3 then
+   return x<.52 and "Plains" or "Steppe"
+  end
+  if x<.075 and (r<mid-2 or r>mid+2) then return "Mountains" end
+  if x<.25+(q>mid and .15 or 0) then return "Forest" end
+  if x<.48 then return "Hills" end
 
 return B
