@@ -58,5 +58,26 @@ function B.generate(n,seed)
   if x<.075 and (r<mid-2 or r>mid+2) then return "Mountains" end
   if x<.25+(q>mid and .15 or 0) then return "Forest" end
   if x<.48 then return "Hills" end
-
+  if x<.64 then return "Plains" end
+  return "Steppe"
+ end
+ for r=0,n-1 do
+  for q=0,n-1 do
+   local id=B.key(q,r)
+   local t={id=id,q=q,r=r,terrain=terrain(q,r),owner="neutral"}
+   s.tiles[id]=t;table.insert(s.order,id)
+  end
+ end
+ local function city(q,r,id,name,owner,capital)
+  local t=s.tiles[B.key(q,r)]
+  t.terrain=owner=="rus" and "Plains" or "Steppe";t.city=id
+  s.cities[id]={id=id,name=name,tile=t.id,owner=owner,capital=capital,buildings={}}
+  table.insert(s.cityOrder,id)
+ end
+ city(1,mid,"sarai","Sarai","mongol",true)
+ city(n-2,mid,"novgorod","Novgorod","rus",true)
+ city(mid+1,mid,"sarkel","Sarkel","neutral",false)
+ city(mid-2,n-3,"crossroads","Silk Road Ford","neutral",false)
+ return s
+end
 return B
