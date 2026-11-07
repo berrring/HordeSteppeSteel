@@ -28,5 +28,15 @@ C.Buildings={
 C.Terrain={
  Plains={move=1,def=0,color=Color3.fromHex("91A66F"),height=.19,resource="food"},
  Steppe={move=1,def=0,color=Color3.fromHex("788D4D"),height=.26,resource="food"},
-
+ Forest={move=2,def=1,color=Color3.fromHex("52684F"),height=.44,resource="wood"},
+ Hills={move=2,def=1,color=Color3.fromHex("9A8968"),height=.61,resource="gold"},
+ Mountains={move=99,def=2,color=Color3.fromHex("777C80"),height=.90},
+ Water={move=99,def=0,color=Color3.fromHex("496D83"),height=.055},
+ Ford={move=2,def=0,color=Color3.fromHex("709697"),height=.11},
+}
+C.Sizes={[12]=true,[14]=true,[16]=true}
+C.FieldOrigin=Vector3.new(-260,1,-205)
+C.HexRadius=4.75
+C.MaxUnits=14
+C.AssetScale=.76
 return C
