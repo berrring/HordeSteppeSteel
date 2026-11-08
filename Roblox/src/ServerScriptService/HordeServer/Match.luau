@@ -78,5 +78,45 @@ function M.new(n,seed)
  s.resources={mongol=copy(C.Start),rus=copy(C.Start)}
  s.stats={kills={mongol=0,rus=0},captures={mongol=0,rus=0},recruits={mongol=0,rus=0}}
  local mid=math.floor(n/2)
+ for _,p in ipairs({{"mongol","sarai",1,{"archer","light","infantry"}},{"rus","novgorod",n-2,{"infantry","spear","infantry"}}}) do
+  local f,city,q,kinds=table.unpack(p)
+  local c=s.cities[city]
+  claim(s,s.tiles[c.tile],f)
+  local positions={{q,mid},{q,mid-1},{q,mid+1}}
+  for i,point in ipairs(positions) do
+   local tile=s.tiles[B.key(point[1],point[2])]
+   if C.Terrain[tile.terrain].move>2 then tile.terrain="Plains" end
+   tile.owner=f
+   spawn(s,f,kinds[i],tile,f=="mongol")
+  end
+ end
+ return s
+end
+local function action(s,f)
+ return not s.result and s.active==f
+end
+local function access(s,f,id)
+ if not action(s,f) then return nil,"Wait for your turn." end
+ local u=s.units[id]
+ if not u or u.faction~=f then return nil,"Select one of your units." end
+ return u
+end
+function M.move(s,f,id,dest)
+ local u,msg=access(s,f,id)
+ if not u then return false,msg end
+ local t=s.tiles[dest]
+ if not t then return false,"That tile is outside the map." end
+ local costs,prev=B.moveRange(s,u)
+ if not costs[dest] then return false,"Destination is blocked or out of movement range." end
+ local route={dest}
+ local k=dest
+ while prev[k] and prev[k]~=u.tile do k=prev[k];table.insert(route,1,k) end
+ local from=u.tile
+ s.tiles[from].unit=nil;t.unit=id;u.tile=dest
+ u.mp-=costs[dest]
+ table.insert(s.events,{kind="move",unit=id,from=from,route=route})
+ claim(s,t,f)
+ return true,"Moved "..C.Units[u.kind].name.."."
+end
 
 return M
