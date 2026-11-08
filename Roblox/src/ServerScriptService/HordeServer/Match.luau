@@ -118,5 +118,35 @@ function M.move(s,f,id,dest)
  claim(s,t,f)
  return true,"Moved "..C.Units[u.kind].name.."."
 end
+function M.damage(s,u,target)
+ local def=C.Units[u.kind]
+ local td=C.Units[target.kind]
+ local t=s.tiles[target.tile]
+ local mitigation=td.defense+C.Terrain[t.terrain].def+M.cityDefense(t.city and s.cities[t.city])
+ local power=def.attack+(u.kind=="spear" and td.mounted and 4 or 0)
+ return math.max(2,power-math.floor(mitigation*.57))
+end
+function M.attack(s,f,id,targetId)
+ local u,msg=access(s,f,id)
+ if not u then return false,msg end
+ local t=s.units[targetId]
+ if not t or t.faction==f then return false,"Choose an enemy unit." end
+ if u.attacked then return false,"This unit has already attacked." end
+ if B.distance(s.tiles[u.tile],s.tiles[t.tile])>C.Units[u.kind].range then return false,"Enemy is beyond attack range." end
+ local damage=M.damage(s,u,t)
+ u.attacked=true
+ u.mp=math.max(0,u.mp-1)
+ t.hp=math.max(0,t.hp-damage)
+ local detail=t.hp==0 and " defeated." or " took "..damage.." damage."
+ table.insert(s.events,{kind="attack",unit=id,target=targetId,from=u.tile,tile=t.tile,damage=damage,defeated=t.hp==0,text=C.Units[t.kind].name..detail})
+ if t.hp==0 then
+  s.tiles[t.tile].unit=nil
+  s.units[targetId]=nil
+  s.stats.kills[f]+=1
+ end
+ return true,C.Units[t.kind].name..detail
+end
+function M.afford(s,f,cost)
+ for k,v in pairs(cost) do if s.resources[f][k]<v then return false end end
 
 return M
