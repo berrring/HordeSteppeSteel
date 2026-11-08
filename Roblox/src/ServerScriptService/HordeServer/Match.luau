@@ -148,5 +148,30 @@ function M.attack(s,f,id,targetId)
 end
 function M.afford(s,f,cost)
  for k,v in pairs(cost) do if s.resources[f][k]<v then return false end end
+ return true
+end
+local function pay(s,f,cost)
+ for k,v in pairs(cost) do s.resources[f][k]-=v end
+end
+function M.recruitTile(s,city)
+ local t=s.tiles[city.tile]
+ if not t.unit then return t end
+ for _,v in ipairs(B.neighbors(s,t)) do
+  if not v.unit and v.owner==city.owner and C.Terrain[v.terrain].move<99 then return v end
+ end
+ return nil
+end
+function M.recruit(s,f,cityId,kind)
+ if not action(s,f) then return false,"Wait for your turn." end
+ local city,def=s.cities[cityId],C.Units[kind]
+ if not city or city.owner~=f or not def then return false,"Select a friendly city and unit." end
+ if f=="rus" and def.mounted then return false,"Rus recruits infantry and spearmen in this slice." end
+ if city.recruited==s.turn then return false,"This city has already recruited this turn." end
+ local count=0
+ for _,u in pairs(s.units) do if u.faction==f then count+=1 end end
+ if count>=C.MaxUnits then return false,"Army limit reached." end
+ local t=M.recruitTile(s,city)
+ if not t then return false,"Clear the city or an adjacent friendly tile." end
+ if not M.afford(s,f,def.cost) then return false,"Not enough resources." end
 
 return M
