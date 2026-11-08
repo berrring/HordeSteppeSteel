@@ -173,5 +173,31 @@ function M.recruit(s,f,cityId,kind)
  local t=M.recruitTile(s,city)
  if not t then return false,"Clear the city or an adjacent friendly tile." end
  if not M.afford(s,f,def.cost) then return false,"Not enough resources." end
-
+ pay(s,f,def.cost)
+ local u=spawn(s,f,kind,t,false)
+ city.recruited=s.turn
+ s.stats.recruits[f]+=1
+ table.insert(s.events,{kind="recruit",unit=u.id,tile=t.id,text=C.Units[kind].name.." rallied at "..city.name.."."})
+ return true,"Recruited "..def.name..". Ready next turn."
+end
+function M.build(s,f,cityId,kind)
+ if not action(s,f) then return false,"Wait for your turn." end
+ local city,def=s.cities[cityId],C.Buildings[kind]
+ if not city or city.owner~=f or not def then return false,"Select a friendly city and structure." end
+ if city.buildings[kind] then return false,"This structure is already built." end
+ if city.built==s.turn then return false,"This city has already built this turn." end
+ if not M.afford(s,f,def.cost) then return false,"Not enough resources." end
+ pay(s,f,def.cost);city.buildings[kind]=true;city.built=s.turn
+ return true,def.name.." constructed at "..city.name.."."
+end
+function M.begin(s,f)
+ s.active=f
+ local income=M.income(s,f)
+ for k,v in pairs(income) do s.resources[f][k]+=v end
+ for _,id in ipairs(s.unitOrder) do
+  local u=s.units[id]
+  if u and u.faction==f then resetBudget(u) end
+ end
+ return income
+end
 return M
