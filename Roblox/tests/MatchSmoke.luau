@@ -43,5 +43,30 @@ good(M.move(s,"mongol",a.id,target) and a.mp==5-cost and not s.tiles[start].unit
 local water
 for _,id in ipairs(s.order) do if s.tiles[id].terrain=="Water" then water=id;break end end
 good(water and not M.move(s,"mongol",a.id,water),"Water impassable")
+local w,g=s.resources.mongol.wood,s.resources.mongol.gold
+good(M.build(s,"mongol","sarai","farm") and s.resources.mongol.wood==w-7 and s.resources.mongol.gold==g-3,"Construction deducts exact costs")
+good(not M.build(s,"mongol","sarai","farm") and not M.build(s,"mongol","sarai","fortress"),"Duplicate and same-turn construction rejected")
+local food=s.resources.mongol.food
+g=s.resources.mongol.gold
+good(M.recruit(s,"mongol","sarai","spear") and s.resources.mongol.food==food-5 and s.resources.mongol.gold==g-7,"Recruitment deducts exact costs")
+good(s.units.U7.mp==0 and not M.recruit(s,"mongol","sarai","infantry"),"New unit waits and duplicate recruitment rejected")
+local incoming=M.income(s,"mongol")
+food=s.resources.mongol.food
+s.turn+=1;M.begin(s,"mongol")
+good(s.resources.mongol.food==food+incoming.food and incoming.food>=8 and s.units.U7.mp==3,"Income and new-turn reset")
+local store=M.snapshot(s)
+store.resources.mongol.gold=0
+good(s.resources.mongol.gold>0,"Snapshot isolates resource state")
+local function relocate(s,id,tile)
+ local u=s.units[id]
+ s.tiles[u.tile].unit=nil;s.tiles[tile].unit=id;u.tile=tile
+end
+local c=M.new(12,1811)
+local enemy=c.units.U4
+good(not M.attack(c,"mongol","U1",enemy.id),"Out-of-range combat rejected")
+local near=B.key(9,6)
+relocate(c,"U1",near)
+local dmg=M.damage(c,c.units.U1,enemy)
+good(M.attack(c,"mongol","U1",enemy.id) and enemy.hp==enemy.maxHp-dmg,"Ranged attack uses deterministic damage")
 
 return {checks=checks,console="server VM"}
