@@ -68,5 +68,25 @@ local near=B.key(9,6)
 relocate(c,"U1",near)
 local dmg=M.damage(c,c.units.U1,enemy)
 good(M.attack(c,"mongol","U1",enemy.id) and enemy.hp==enemy.maxHp-dmg,"Ranged attack uses deterministic damage")
-
-return {checks=checks,console="server VM"}
+good(not M.attack(c,"mongol","U1",enemy.id),"Second attack rejected")
+enemy.hp=2;c.units.U1.attacked=false
+good(M.attack(c,"mongol","U1",enemy.id) and not c.units[enemy.id] and not c.tiles[c.cities.novgorod.tile].unit,"Combat removes defeated unit")
+good(M.move(c,"mongol","U1",c.cities.novgorod.tile) and c.result=="mongol" and c.cities.novgorod.owner=="mongol","Capture updates ownership and triggers victory")
+local v=M.new(12,1811)
+local key=B.key(2,6)
+v.tiles[v.units.U1.tile].unit=nil;v.units.U1=nil
+relocate(v,"U4",key)
+M.begin(v,"rus")
+good(M.move(v,"rus","U4",v.cities.sarai.tile) and v.result=="rus" and v.cities.sarai.owner=="rus","Rus capture triggers defeat")
+local loop=M.new(14,1811)
+local actions=0
+local stable=0
+for _=1,18 do
+ if loop.result then break end
+ M.begin(loop,"rus");actions+=AI.run(loop);stable+=1
+ if not loop.result then loop.turn+=1;M.begin(loop,"mongol") end
+ for id,u in pairs(loop.units) do assert(loop.tiles[u.tile].unit==id) end
+ for _,id in ipairs(loop.order) do local t=loop.tiles[id];assert(not t.unit or loop.units[t.unit].tile==id) end
+end
+good(actions>4 and stable>=2,"AI takes legal actions across repeated turns with consistent occupancy")
+return {checks=checks,aiActions=actions,cycles=stable,result=loop.result,console="server VM"}
