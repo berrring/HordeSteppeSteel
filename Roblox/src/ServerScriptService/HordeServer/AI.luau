@@ -28,5 +28,30 @@ local function distances(s,goal)
  return seen
 end
 function A.run(s)
+ local count=0
+ local own=s.cities.novgorod
+ local cap=s.tiles[own.tile]
+ local threat
+ for _,u in pairs(s.units) do
+  if u.faction=="mongol" and B.distance(s.tiles[u.tile],cap)<=3 then
+   if not threat or s.tiles[u.tile].id<threat.id then threat=s.tiles[u.tile] end
+  end
+ end
+ for _,id in ipairs(s.unitOrder) do
+  local u=s.units[id]
+  if u and u.faction=="rus" and not s.result then
+   local victim=enemies(s,u)
+   if victim and not u.attacked then if M.attack(s,"rus",id,victim.id) then count+=1 end end
+   local goal=threat
+   if not goal then
+    for _,k in ipairs({"sarkel","crossroads","sarai"}) do
+     local city=s.cities[k]
+     if city.owner~="rus" then goal=s.tiles[city.tile];break end
+    end
+   end
+   if goal then
+    local route=distances(s,goal)
+    local opts=B.moveRange(s,u)
+    local best,bestValue
 
 return AI
