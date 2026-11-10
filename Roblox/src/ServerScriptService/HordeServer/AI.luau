@@ -53,5 +53,30 @@ function A.run(s)
     local route=distances(s,goal)
     local opts=B.moveRange(s,u)
     local best,bestValue
-
-return AI
+    for _,t in ipairs(s.order) do
+     if opts[t] then
+      local tile=s.tiles[t]
+      local distance=route[t] or 100
+      local value=-distance*10-opts[t]*.2+(tile.owner=="rus" and 0 or 2)
+      if not bestValue or value>bestValue then best,bestValue=t,value end
+     end
+    end
+    local current=route[u.tile] or 100
+    if best and (route[best] or 100)<current and M.move(s,"rus",id,best) then count+=1 end
+   end
+   victim=enemies(s,u)
+   if victim and not u.attacked and not s.result then if M.attack(s,"rus",id,victim.id) then count+=1 end end
+  end
+ end
+ if not s.result then
+  for _,id in ipairs(s.cityOrder) do
+   if s.cities[id].owner=="rus" then
+    if M.recruit(s,"rus",id,s.turn%2==0 and "spear" or "infantry") then count+=1 end
+    if threat and M.build(s,"rus",id,"fortress") then count+=1
+    elseif M.build(s,"rus",id,s.turn%2==0 and "farm" or "lumber") then count+=1 end
+   end
+  end
+ end
+ return count
+end
+return A
