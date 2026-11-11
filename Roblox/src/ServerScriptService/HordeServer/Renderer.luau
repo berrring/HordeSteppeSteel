@@ -68,5 +68,65 @@ local function rusCity(capital)
  end
  return m
 end
+local axes={{1,0},{.5,math.sqrt(3)/2},{-.5,math.sqrt(3)/2},{-1,0},{-.5,-math.sqrt(3)/2},{.5,-math.sqrt(3)/2}}
+function R.new()
+ return setmetatable({tiles={},units={},cities={},bands={},stamp={},motion={}},R)
+end
+function R:reset(s)
+ if self.world then self.world:Destroy() end
+ self.tiles={};self.units={};self.cities={};self.bands={};self.stamp={};self.motion={}
+ local root=Instance.new("Model");root.Name="HordeWorld"
+ root.ModelStreamingMode=Enum.ModelStreamingMode.Persistent
+ root:SetAttribute("MapSize",s.size);root:SetAttribute("Seed",s.seed)
+ self.world=root
+ self.tileRoot=folder(root,"Tiles")
+ self.borderRoot=folder(root,"Borders")
+ self.unitRoot=folder(root,"Armies")
+ self.cityRoot=folder(root,"Settlements")
+ local props=folder(root,"Terrain Props")
+ local N=s.size
+ local extent=(N-1)*math.sqrt(3)*C.HexRadius
+ local depth=(N-1)*1.5*C.HexRadius
+ part(root,"Carved steppe map base",Vector3.new(extent+15,.75,depth+12),CFrame.new(C.FieldOrigin+Vector3.new(extent/2+2,-.46,depth/2)),C.Palette.steel,Enum.Material.Slate)
+ for _,id in ipairs(s.order) do
+  local t=s.tiles[id]
+  local a=C.Terrain[t.terrain];local p=B.position(t.q,t.r)
+  local slabSize=Vector3.new(C.HexRadius*math.sqrt(3)*.978,a.height+.14,C.HexRadius*.978)
+  local pose=CFrame.new(p+Vector3.new(0,(a.height-.14)/2,0))
+  local material=(t.terrain=="Water" or t.terrain=="Ford") and Enum.Material.SmoothPlastic or Enum.Material.Plastic
+  local tile=part(self.tileRoot,id,slabSize,pose,a.color,material)
+  for i=1,2 do
+   local wing=part(tile,"Hex wing "..i,slabSize,pose*CFrame.Angles(0,i*math.pi/3,0)+Vector3.new(0,i*.003,0),a.color,material)
+   wing:SetAttribute("TileId",id);wing.CanQuery=true
+  end
+  tile.CanCollide=false;tile.CanQuery=true;tile.CanTouch=false
+  tile:SetAttribute("TileId",id);tile:SetAttribute("Q",t.q);tile:SetAttribute("R",t.r);tile:SetAttribute("Terrain",t.terrain)
+  tile:SetAttribute("Traversable",a.move<99);tile:SetAttribute("MoveCost",a.move)
+  tile:SetAttribute("Resource",a.resource)
+  tile.Parent=self.tileRoot;self.tiles[id]=tile
+  local idx=(t.q*113+t.r*73+s.seed)%7
+  local name,scale
+  if not t.city then
+   if t.terrain=="Forest" and idx<5 then name=idx%2==0 and "Steppe_Tree_Pine" or "Steppe_Tree_Broadleaf";scale=.34
+   elseif t.terrain=="Mountains" then name="Steppe_Rock";scale=.64
+   elseif t.terrain=="Hills" and idx<3 then name="Steppe_Rock";scale=.31 end
+  end
+  if name then
+   local pos=p+Vector3.new(idx%3-1,a.height,-.9)
+   clone(assets.Environment[name],id.." Decor",CFrame.new(pos)*CFrame.Angles(0,idx*.57,0),scale).Parent=props
+  end
+ end
+ root.Parent=workspace
+end
+function R:surface(t)
+ return B.position(t.q,t.r)+Vector3.new(0,C.Terrain[t.terrain].height,0)
+end
+function R:unitPose(s,u,tileId)
+ local t=s.tiles[tileId]
+ local offset=t.city and Vector3.new(1.26,0,1.52) or Vector3.zero
+ return CFrame.new(self:surface(t)+offset)*CFrame.Angles(0,u.faction=="mongol" and math.pi/2 or -math.pi/2,0)
+end
+function R:animate(m,u,s,route,strike)
+ local key=u.id
 
 return R
