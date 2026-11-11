@@ -128,5 +128,65 @@ function R:unitPose(s,u,tileId)
 end
 function R:animate(m,u,s,route,strike)
  local key=u.id
+ local version=(self.motion[key] or 0)+1
+ self.motion[key]=version
+ local motion=self.motion
+ task.spawn(function()
+  local function tweenTo(target,duration)
+   if motion[key]~=version or not m.Parent then return false end
+   local cf=Instance.new("CFrameValue");cf.Value=m:GetPivot()
+   local conn=cf.Changed:Connect(function(value)
+    if m.Parent and motion[key]==version then m:PivotTo(value) end
+   end)
+   local tween=Tween:Create(cf,TweenInfo.new(duration,Enum.EasingStyle.Sine),{Value=target})
+   tween:Play();tween.Completed:Wait()
+   conn:Disconnect();cf:Destroy()
+   return motion[key]==version and m.Parent~=nil
+  end
+  for _,dest in ipairs(route or {}) do
+   if not tweenTo(self:unitPose(s,u,dest),.11) then return end
+  end
+  if strike and strike.from==u.tile and s.tiles[strike.tile] then
+   local home=self:unitPose(s,u,u.tile)
+   local target=self:surface(s.tiles[strike.tile])
+   local offset=target-home.Position;offset=Vector3.new(offset.X,0,offset.Z)
+   if offset.Magnitude>.01 and tweenTo(home+offset.Unit*(u.kind=="archer" and .21 or .66),.12) then
+    tweenTo(home,.14)
+   end
+  end
+ end)
+end
+function R:ownerOverlay(s,t)
+ local owner=t.owner
+ local p=self:surface(t);local draw={};local pattern=owner
+ if owner~="neutral" then
+  local adjacent=B.neighbors(s,t)
+  for i,axis in ipairs(axes) do
+   local axisV=Vector3.new(axis[1],0,axis[2])
+   local adjacentOwner="edge"
+   for _,n in ipairs(adjacent) do
+    local offset=B.position(n.q,n.r)-B.position(t.q,t.r)
+    if offset.Unit:Dot(axisV)>.998 then adjacentOwner=n.owner;break end
+   end
+   if adjacentOwner~=owner then draw[i]=axisV;pattern..=tostring(i) end
+  end
+ end
+ if pattern==self.stamp[t.id] then return end
+ self.stamp[t.id]=pattern
+ if self.bands[t.id] then self.bands[t.id]:Destroy();self.bands[t.id]=nil end
+ if owner=="neutral" then return end
+ local tint=C.Factions[owner].color
+ local f=folder(self.borderRoot,t.id);self.bands[t.id]=f
+ for _,v in pairs(draw) do
+  local mid=p+v*C.HexRadius*.822+Vector3.new(0,.039,0)
+  local segment=part(f,"Border",Vector3.new(C.HexRadius*.94,.055,.125),CFrame.lookAt(mid,mid+v),tint)
+  segment.CastShadow=false
+ end
+end
+function R:update(s)
+ local routes,strikes={},{}
+ for _,event in ipairs(s.events) do
+  if event.kind=="move" then
+   local route=routes[event.unit] or {}
 
 return R
