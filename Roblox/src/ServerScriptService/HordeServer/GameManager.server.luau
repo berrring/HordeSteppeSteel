@@ -38,4 +38,42 @@ local function process(player,r)
   host=player
   current=M.snapshot(saved);current.events={}
   showMatch()
-
+  return response(true,"Checkpoint restored.")
+ end
+ if not current or host~=player then return response(false,"Start a campaign first.") end
+ if action=="save" then
+  if current.active~="mongol" or current.result then return response(false,"Save during an active Mongol turn.") end
+  saved=M.snapshot(current);saved.events={}
+  return response(true,"Checkpoint saved for this server session.")
+ end
+ if current.active~="mongol" or current.result then return response(false,"The campaign is no longer accepting orders.") end
+ current.events={}
+ local success,message
+ if action=="move" and type(r.unit)=="string" and type(r.tile)=="string" then success,message=M.move(current,"mongol",r.unit,r.tile)
+ elseif action=="attack" and type(r.unit)=="string" and type(r.target)=="string" then success,message=M.attack(current,"mongol",r.unit,r.target)
+ elseif action=="recruit" and type(r.city)=="string" and type(r.kind)=="string" then success,message=M.recruit(current,"mongol",r.city,r.kind)
+ elseif action=="build" and type(r.city)=="string" and type(r.kind)=="string" then success,message=M.build(current,"mongol",r.city,r.kind)
+ elseif action=="end" then
+  M.begin(current,"rus")
+  local actions=AI.run(current)
+  if not current.result then
+   current.turn+=1
+   local inc=M.begin(current,"mongol")
+   message=string.format("Rus took %d actions. Income +%d gold, +%d food, +%d wood.",actions,inc.gold,inc.food,inc.wood)
+  else message="The Rus army seized Sarai." end
+  success=true
+ else success=false;message="Unknown or malformed order." end
+ if success then renderer:update(current) end
+ return response(success,message)
+end
+remote.OnServerInvoke=function(player,r)
+ local ok,value=pcall(process,player,r)
+ if ok then return value end
+ warn("[HORDE] Command failed: "..tostring(value))
+ return response(false,"The order stopped due to a server error.")
+end
+P.PlayerRemoving:Connect(function(player)
+ last[player]=nil
+ if host==player then host=nil end
+end)
+print("[HORDE] Campaign server ready.")
