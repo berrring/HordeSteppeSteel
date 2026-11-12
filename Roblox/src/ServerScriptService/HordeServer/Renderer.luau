@@ -188,5 +188,69 @@ function R:update(s)
  for _,event in ipairs(s.events) do
   if event.kind=="move" then
    local route=routes[event.unit] or {}
-
+   for _,id in ipairs(event.route) do table.insert(route,id) end
+   routes[event.unit]=route
+  elseif event.kind=="attack" then strikes[event.unit]=event end
+ end
+ for _,id in ipairs(s.order) do
+  local t=s.tiles[id];local part=self.tiles[id]
+  part:SetAttribute("Owner",t.owner);part:SetAttribute("City",t.city);part:SetAttribute("Unit",t.unit)
+  self:ownerOverlay(s,t)
+ end
+ for id,m in pairs(self.units) do
+  if not s.units[id] then m:Destroy();self.units[id]=nil;self.motion[id]=nil end
+ end
+ for _,id in ipairs(s.unitOrder) do
+  local u=s.units[id]
+  if u then
+   local m=self.units[id]
+   if not m then
+    local cf=self:unitPose(s,u,u.tile)
+    if u.faction=="mongol" then m=clone(assets.Units[C.Units[u.kind].asset],id,cf,C.AssetScale) else m=rusUnit(u.kind);m:PivotTo(cf) end
+    m.Name=id;m.Parent=self.unitRoot;self.units[id]=m
+    local anchor=m:FindFirstChildWhichIsA("BasePart",true)
+    local gui=label(anchor,C.Units[u.kind].name,C.Palette.snow)
+    gui.Name="Health";gui.StudsOffsetWorldSpace=Vector3.new(0,u.faction=="mongol" and 2.45 or 1.23,0);gui.Size=UDim2.fromOffset(69,17)
+    local hp=gui:FindFirstChildWhichIsA("TextLabel")
+    hp.Name="HP";hp.TextSize=10
+    local bar=Instance.new("Frame");bar.Name="Bar";bar.BorderSizePixel=0;bar.BackgroundColor3=C.Factions[u.faction].color
+    bar.Size=UDim2.fromScale(1,.16);bar.Position=UDim2.fromScale(0,.84);bar.Parent=hp
+   elseif routes[id] or strikes[id] then self:animate(m,u,s,routes[id],strikes[id]) end
+   m:SetAttribute("TileId",u.tile);m:SetAttribute("Faction",u.faction)
+   m:SetAttribute("HP",u.hp);m:SetAttribute("MaxHP",u.maxHp);m:SetAttribute("Kind",u.kind)
+   local hp=m:FindFirstChild("Health",true).HP;hp.Text=u.hp.." / "..u.maxHp
+   hp.Bar.Size=UDim2.fromScale(u.hp/u.maxHp,.16)
+  end
+ end
+ for _,id in ipairs(s.cityOrder) do
+  local c=s.cities[id];local t=s.tiles[c.tile]
+  local mark=c.owner..tostring(c.buildings.fortress)..tostring(c.buildings.farm)..tostring(c.buildings.lumber)
+  if not self.cities[id] or self.cities[id].mark~=mark then
+   if self.cities[id] then self.cities[id].model:Destroy() end
+   local base=CFrame.new(self:surface(t)+Vector3.new(-.71,0,-.71))
+   local city
+   if c.owner=="rus" and not c.buildings.fortress then city=rusCity(c.capital);city:PivotTo(base)
+   else
+    local name=c.buildings.fortress and "Mongol_Fortress" or c.capital and "Mongol_CapitalYurt" or "Mongol_Yurt"
+    city=clone(assets.Buildings[name],id,base,c.buildings.fortress and .44 or .64)
+    if c.owner=="rus" then
+     for _,p in ipairs(city:GetDescendants()) do
+      if p:IsA("BasePart") and (p.Name:find("roof") or p.Name:find("Banner")) then p.Color=C.Factions.rus.color:Lerp(C.Palette.steel,.3) end
+     end
+    end
+   end
+   city.Name=id;city.Parent=self.cityRoot
+   local flagParent=part(city,"City marker",Vector3.new(.2,.2,.2),base+Vector3.new(0,2.92,0),C.Palette.steel)
+   flagParent.Transparency=1
+   label(flagParent,c.name,c.owner=="neutral" and C.Palette.snow or C.Factions[c.owner].color).StudsOffsetWorldSpace=Vector3.new(0,.10,0)
+   if c.buildings.farm then
+    for i=1,3 do part(city,"Crop row",Vector3.new(.26,.13,1.35),base*CFrame.new(-1.50+i*.30,.065,2.6),C.Palette.steppe,Enum.Material.Ground) end
+   end
+   if c.buildings.lumber then
+    for i=1,3 do part(city,"Cut timber",Vector3.new(.18,.18,1.30),base*CFrame.new(2.5+i*.21,.1,-1.1),C.Palette.wood,Enum.Material.Wood) end
+   end
+   self.cities[id]={model=city,mark=mark}
+  end
+ end
+end
 return R
