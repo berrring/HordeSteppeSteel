@@ -238,4 +238,112 @@ redraw=function()
  local res=state.resources.mongol
  header(top,"Faction","MONGOL KHANATE",UDim2.new(.35,-5,0,24),UDim2.fromOffset(13,4)).TextSize=14
  S.label(top,"Territory","Turn "..state.turn.."   •   "..terr.." holdings",UDim2.new(.36,-5,0,20),UDim2.fromOffset(13,27),{size=12,color=S.Muted})
-
+ local purse=string.format("Gold  %d     Food  %d     Wood  %d",res.gold,res.food,res.wood)
+ if inc then purse=string.format("Gold %d (+%d)    Food %d (+%d)    Wood %d (+%d)",res.gold,inc.gold,res.food,inc.food,res.wood,inc.wood) end
+ S.label(top,"Resources",purse,UDim2.new(.54,0,1,0),UDim2.new(.30,0,0,0),{size=14,color=S.Text,wrap=true})
+ S.button(top,"Menu","Menu",UDim2.fromOffset(63,34),UDim2.new(1,-72,0,10),openPause)
+ commandStrip:ClearAllChildren()
+ S.button(commandStrip,"EndTurn","End turn",UDim2.new(1,-10,0,40),UDim2.fromOffset(5,4),function() request("end") end,true,true)
+ S.button(commandStrip,"Focus","Focus  [F]",UDim2.new(1,-10,0,29),UDim2.fromOffset(5,49),function() focus(tileId) end,tileId~=nil)
+ context:ClearAllChildren();S.list(context,6)
+ local t=tileId and state.tiles[tileId]
+ local u=selected and state.units[selected]
+ if cityId and state.cities[cityId] then
+  local c=state.cities[cityId];cityPanel(context,c,state.tiles[c.tile])
+ elseif u and t then unitPanel(context,t,u)
+ elseif t then
+  header(context,"Tile",t.terrain,UDim2.new(1,-7,0,30))
+  local inf=C.Terrain[t.terrain]
+  local detail=(t.owner=="neutral" and "Neutral territory" or C.Factions[t.owner].name).."\n"..(inf.move<99 and ("Movement cost: "..inf.move) or "Impassable")
+  if inf.resource then detail..="\nResource: "..inf.resource end
+  S.label(context,"TileInfo",detail,UDim2.new(1,-7,0,72),nil,{size=14,wrap=true})
+ else
+  header(context,"Orders","FIELD ORDERS",UDim2.new(1,-7,0,28))
+  S.label(context,"StartHint","Click an army or settlement. Take Novgorod to win. Watch the river for fords.",UDim2.new(1,-7,0,89),nil,{size=14,wrap=true})
+ end
+ legal,paths={},{}
+ if u and u.faction=="mongol" and not cityId then legal,paths=B.moveRange(state,u) end
+ renderHighlights(hover)
+end
+openGame=function()
+ mode="game";Camera.pause(false);clear()
+ top=keep(S.frame(gui,"HordeHUD",UDim2.new(1,-24,0,56),UDim2.fromOffset(12,9),S.Ink));S.round(top,9)
+ side=keep(S.frame(gui,"CampaignContext",UDim2.new(.29,0,1,-146),UDim2.new(1,-12,0,76),S.Ink))
+ side.AnchorPoint=Vector2.new(1,0);S.round(side,9)
+ local limits=Instance.new("UISizeConstraint");limits.MaxSize=Vector2.new(300,1600);limits.MinSize=Vector2.new(208,230);limits.Parent=side
+ context=Instance.new("ScrollingFrame");context.Name="Details";context.Size=UDim2.new(1,-20,1,-107)
+ context.Position=UDim2.fromOffset(12,10);context.BackgroundTransparency=1;context.BorderSizePixel=0;context.ScrollBarThickness=4
+ context.CanvasSize=UDim2.new();context.AutomaticCanvasSize=Enum.AutomaticSize.Y;context.Parent=side
+ commandStrip=S.frame(side,"CommandStrip",UDim2.new(1,-12,0,83),UDim2.new(0,6,1,-88),S.Ink)
+ feed=keep(S.frame(gui,"CampaignFeed",UDim2.new(.68,-18,0,54),UDim2.new(0,12,1,-61),S.Ink));S.round(feed,8)
+ banner=S.label(feed,"Message",message,UDim2.new(1,-20,0,29),UDim2.fromOffset(10,2),{size=13,color=S.Gold,wrap=true})
+ S.label(feed,"Controls","WASD / right-drag pan   ·   Wheel zoom   ·   Q / E rotate   ·   F focus",UDim2.new(1,-20,0,19),UDim2.fromOffset(10,32),{size=11,color=S.Muted,wrap=true})
+ redraw()
+ task.delay(.35,function() if mode=="game" then renderHighlights() end end)
+end
+openPause=function()
+ mode="pause";Camera.pause(true);visuals:ClearAllChildren();clear()
+ local bg=background("Pause")
+ local p=card(bg,"Paused",430,365)
+ header(p,"Title","CAMPAIGN PAUSED",UDim2.new(1,-40,0,45),UDim2.fromOffset(20,14))
+ banner=S.label(p,"Message",message,UDim2.new(1,-40,0,48),UDim2.fromOffset(20,54),{size=14,color=S.Muted,wrap=true})
+ for i,a in ipairs({
+  {"Resume","Resume campaign",openGame,true},
+  {"Save","Save session checkpoint",function() request("save") end,true},
+  {"Restore","Restore session checkpoint",function() request("continue") end,save},
+  {"MainMenu","Main menu",function() openMenu(false) end,true},
+ }) do S.button(p,a[1],a[2],UDim2.new(1,-40,0,43),UDim2.fromOffset(20,109+(i-1)*55),a[3],a[4],i==1) end
+end
+openResult=function()
+ mode="result";Camera.pause(true);visuals:ClearAllChildren();clear()
+ local bg=background("Result")
+ local p=card(bg,"Campaign Result",480,350)
+ local win=state.result=="mongol"
+ header(p,"Outcome",win and "VICTORY  /  NOVGOROD FALLS" or "DEFEAT  /  SARAI HAS FALLEN",UDim2.new(1,-40,0,61),UDim2.fromOffset(20,14))
+ S.label(p,"Stats",string.format("Turns completed: %d\nEnemy armies routed: %d\nSettlements captured: %d\nUnits recruited: %d",state.turn,state.stats.kills.mongol,state.stats.captures.mongol,state.stats.recruits.mongol),UDim2.new(1,-40,0,111),UDim2.fromOffset(20,80),{size=16,wrap=true})
+ S.button(p,"Restart","Restart same map",UDim2.new(1,-40,0,44),UDim2.fromOffset(20,206),function() request("start",{size=state.size,faction="mongol",seed=state.seed}) end,true,true)
+ S.button(p,"NewGame","Return to main menu",UDim2.new(1,-40,0,44),UDim2.fromOffset(20,263),function() openMenu(false) end)
+end
+local function mapSelect(id)
+ local t=state.tiles[id]
+ if not t then return end
+ local u=selected and state.units[selected]
+ if u and u.faction=="mongol" and not cityId and id~=u.tile then
+  local target=t.unit and state.units[t.unit]
+  if target and target.faction~="mongol" and B.distance(t,state.tiles[u.tile])<=C.Units[u.kind].range then
+   request("attack",{unit=u.id,target=target.id});return
+  elseif legal[id] then request("move",{unit=u.id,tile=id});return end
+ end
+ if id==tileId and t.city and not cityId then
+  cityId=t.city;selected=nil
+ elseif id==tileId and cityId and t.unit then cityId=nil;selected=t.unit
+ else
+  tileId=id;selected=t.unit;cityId=not t.unit and t.city or nil
+ end
+ redraw()
+end
+UIS.InputBegan:Connect(function(inp,processed)
+ if UIS:GetFocusedTextBox() then return end
+ if (inp.KeyCode==Enum.KeyCode.Escape or inp.KeyCode==Enum.KeyCode.P) and not busy then
+  if mode=="game" then openPause() elseif mode=="pause" then openGame() end
+  return
+ end
+ if processed or mode~="game" or busy or not state then return end
+ if inp.KeyCode==Enum.KeyCode.F then focus(tileId);return end
+ if inp.UserInputType==Enum.UserInputType.MouseButton1 then
+  local id=worldTile()
+  if id then mapSelect(id) end
+ end
+end)
+local elapsed=0
+Run.Heartbeat:Connect(function(dt)
+ if mode~="game" then return end
+ elapsed+=dt
+ if elapsed<.09 then return end
+ elapsed=0
+ local id=worldTile()
+ if id~=hover then hover=id;renderHighlights(hover) end
+end)
+Camera.start()
+request("status")
+openMenu(false)
