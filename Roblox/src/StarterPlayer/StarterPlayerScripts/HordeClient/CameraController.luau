@@ -33,5 +33,31 @@ function Camera.start()
   if input.KeyCode==Enum.KeyCode.E then yaw+=math.pi/6 end
  end)
  UIS.InputEnded:Connect(function(input)
-
-return C
+  if input.UserInputType==Enum.UserInputType.MouseButton2 then drag=false end
+ end)
+ UIS.InputChanged:Connect(function(input,gp)
+  if paused then return end
+  if input.UserInputType==Enum.UserInputType.MouseWheel and not gp then zoom=math.clamp(zoom-input.Position.Z*8,30,147) end
+  if drag and input.UserInputType==Enum.UserInputType.MouseMovement then
+   local right=Vector3.new(math.cos(smoothYaw),0,-math.sin(smoothYaw))
+   local back=Vector3.new(math.sin(smoothYaw),0,math.cos(smoothYaw))
+   target-=right*input.Delta.X*(zoom/670)
+   target+=back*input.Delta.Y*(zoom/670)
+  end
+ end)
+ Run:BindToRenderStep("HordeStrategyCamera",Enum.RenderPriority.Camera.Value+1,function(dt)
+  local right=Vector3.new(math.cos(smoothYaw),0,-math.sin(smoothYaw))
+  local forward=Vector3.new(-math.sin(smoothYaw),0,-math.cos(smoothYaw))
+  if not paused and not UIS:GetFocusedTextBox() then
+   local x=(UIS:IsKeyDown(Enum.KeyCode.D) and 1 or 0)-(UIS:IsKeyDown(Enum.KeyCode.A) and 1 or 0)
+   local z=(UIS:IsKeyDown(Enum.KeyCode.W) and 1 or 0)-(UIS:IsKeyDown(Enum.KeyCode.S) and 1 or 0)
+   target+=(right*x+forward*z)*(22+smoothed*.21)*dt
+  end
+  target=Vector3.new(math.clamp(target.X,minX,maxX),C.FieldOrigin.Y,math.clamp(target.Z,minZ,maxZ))
+  local alpha=1-math.exp(-dt*10)
+  focus=focus:Lerp(target,alpha);smoothed+=(zoom-smoothed)*alpha;smoothYaw+=(yaw-smoothYaw)*alpha
+  local eye=Vector3.new(math.sin(smoothYaw)*.68,.735,math.cos(smoothYaw)*.68)*smoothed
+  cam.CFrame=CFrame.lookAt(focus+eye,focus);cam.Focus=CFrame.new(focus)
+ end)
+end
+return Camera
