@@ -1,0 +1,10 @@
+# Exclude legacy archives and python prototypes from GitHub language stats
+legacy/** linguist-vendored
+horde/** linguist-vendored
+tests/** linguist-vendored
+*.py linguist-vendored
+*.bat linguist-vendored
+
+# Ensure Luau is detected as the primary language
+*.luau linguist-detectable=true
+*.luau linguist-language=Luau
