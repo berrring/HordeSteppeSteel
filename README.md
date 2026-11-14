@@ -13,5 +13,4 @@ The official palette is Steppe Green (#6B8E23), Wood Brown (#5C4033), Bronze Gol
 ## Previous implementations
 
 - [Godot rules archive](legacy/godot-reference/README.md) preserves strategic and tactical logic for reference.
-- [Checkpoint 4 documentation](Checkpoint4_Pitch_and_Technical_Bridge/CHECKPOINT_4_MASTER_DOCUMENT.md) records earlier art and design work.
 - The Python prototype remains in the repository for reference.
