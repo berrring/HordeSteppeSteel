@@ -79,4 +79,45 @@ function A.run(s)
  end
  return count
 end
+function A.checkpoint(s)
+ local count=0
+ for _,id in ipairs(s.unitOrder) do
+  if s.result then break end
+  local army=s.units[id]
+  if army and army.faction=="rus" and army.mp>0 then
+   local from=s.tiles[army.tile]
+   local enemy
+   for _,adj in ipairs(B.neighbors(s,from)) do
+    local other=adj.unit and s.units[adj.unit]
+    if other and other.faction=="mongol" and (not enemy or other.hp<enemy.hp) then enemy=other end
+   end
+   if enemy then
+    if M.attack(s,"rus",id,enemy.id) then count+=1 end
+   else
+    local route={}
+    local open={}
+    for _,q in ipairs(s.order) do
+     local p=s.tiles[q]
+     if p.owner=="mongol" then route[q]=0;table.insert(open,p) end
+    end
+    local i=1
+    while open[i] do
+     local p=open[i];i+=1
+     for _,n in ipairs(B.neighbors(s,p)) do
+      if route[n.id]==nil then route[n.id]=route[p.id]+1;table.insert(open,n) end
+     end
+    end
+    local best,value
+    for _,n in ipairs(B.neighbors(s,from)) do
+     if not n.unit then
+      local points=(n.owner~="rus" and 5 or 0)-(route[n.id] or 99)*4
+      if value==nil or points>value then best,value=n,points end
+     end
+    end
+    if best and M.move(s,"rus",id,best.id) then count+=1 end
+   end
+  end
+ end
+ return count
+end
 return A

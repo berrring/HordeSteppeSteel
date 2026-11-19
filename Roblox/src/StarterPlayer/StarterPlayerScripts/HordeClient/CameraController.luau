@@ -12,16 +12,27 @@ local smoothYaw=yaw
 local minX,maxX,minZ,maxZ=target.X-10,target.X+110,target.Z-10,target.Z+105
 local paused=true
 local drag=false
-function Camera.configure(n,first)
- local a,b=B.position(0,0),B.position(n-1,n-1)
+local touches={}
+local function pan(dx,dy)
+ local right=Vector3.new(math.cos(smoothYaw),0,-math.sin(smoothYaw))
+ local back=Vector3.new(math.sin(smoothYaw),0,math.cos(smoothYaw))
+ target-=right*dx*(zoom/670)
+ target+=back*dy*(zoom/670)
+end
+function Camera.configure(state,first)
+ local a,b=B.center(state.tiles[state.order[1]]),B.center(state.tiles[state.order[1]])
+ for _,id in ipairs(state.order) do
+  local p=B.center(state.tiles[id])
+  a=Vector3.new(math.min(a.X,p.X),p.Y,math.min(a.Z,p.Z))
+  b=Vector3.new(math.max(b.X,p.X),p.Y,math.max(b.Z,p.Z))
+ end
  minX=a.X-8;maxX=b.X+8;minZ=a.Z-8;maxZ=b.Z+8
  target=first or (a+b)/2
  focus=target
- zoom=first and 66 or 104
- smoothed=zoom
+ zoom=93;smoothed=zoom
 end
 function Camera.focus(p) target=Vector3.new(p.X,C.FieldOrigin.Y,p.Z) end
-function Camera.pause(v) paused=v;drag=false end
+function Camera.pause(v) paused=v;drag=false;table.clear(touches) end
 function Camera.start()
  local cam=workspace.CurrentCamera
  cam.CameraType=Enum.CameraType.Scriptable
@@ -39,12 +50,27 @@ function Camera.start()
   if paused then return end
   if input.UserInputType==Enum.UserInputType.MouseWheel and not gp then zoom=math.clamp(zoom-input.Position.Z*8,30,147) end
   if drag and input.UserInputType==Enum.UserInputType.MouseMovement then
-   local right=Vector3.new(math.cos(smoothYaw),0,-math.sin(smoothYaw))
-   local back=Vector3.new(math.sin(smoothYaw),0,math.cos(smoothYaw))
-   target-=right*input.Delta.X*(zoom/670)
-   target+=back*input.Delta.Y*(zoom/670)
+   pan(input.Delta.X,input.Delta.Y)
   end
  end)
+ UIS.TouchStarted:Connect(function(input,processed)
+  if not processed and not paused then touches[input]=input.Position end
+ end)
+ UIS.TouchMoved:Connect(function(input)
+  local last=touches[input]
+  if not last or paused then return end
+  local now=input.Position
+  local companion
+  for item,p in pairs(touches) do if item~=input then companion=p;break end end
+  touches[input]=now
+  if companion then
+   zoom=math.clamp(zoom+((last-companion).Magnitude-(now-companion).Magnitude)*.16,30,147)
+  else
+   local delta=now-last
+   pan(delta.X,delta.Y)
+  end
+ end)
+ UIS.TouchEnded:Connect(function(input) touches[input]=nil end)
  Run:BindToRenderStep("HordeStrategyCamera",Enum.RenderPriority.Camera.Value+1,function(dt)
   local right=Vector3.new(math.cos(smoothYaw),0,-math.sin(smoothYaw))
   local forward=Vector3.new(-math.sin(smoothYaw),0,-math.cos(smoothYaw))

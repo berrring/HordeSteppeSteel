@@ -58,3 +58,12 @@ identified modal recovery and completed-save issues, which were corrected.
 Verification uses Godot 4.5.2, nine engine suites, multi-turn simulations for all
 six factions and rendered campaign/battle checks. Human playtesting remains
 necessary for subjective balance and pacing.
+
+### Entry: Roblox Checkpoint 1 campaign and Studio verification
+- **Team Member:** Human owner and reviewer not yet recorded. Team Arsenal to complete.
+- **Date:** 2026-11-19.
+- **AI Tool Used:** OpenAI Codex with Roblox Studio MCP.
+- **Assistance Scope:** Inspect the live place and repository, adapt the archived twelve-province topology, connect authoritative orders, combat, AI and resource yields, integrate the checkpoint UI, and document Studio checks.
+- **Generated Output:** Updated Roblox place and Luau modules, province and command policies, Studio rule checks, the manual checklist, server validation evidence, demo directions, README and ADR updates.
+- **Student Review & Manual Modifications:** Human review, adjustments and approval pending. No student review or change is attributed here.
+- **Testing Procedure:** Actual Studio client controls for start, selection, march, battle and End Turn. Controlled live command checks for resource and order rejection, repeat turns and clean restart. Isolated server rule checks in Studio. See [manual results](Roblox/docs/Checkpoint1-Manual.md) and [server validation](Roblox/docs/Checkpoint1-Security.md).

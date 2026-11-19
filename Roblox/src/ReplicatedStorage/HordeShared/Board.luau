@@ -4,14 +4,27 @@ function B.key(q,r) return q..":"..r end
 function B.position(q,r)
  return C.FieldOrigin+Vector3.new((q+(r%2)*.5)*math.sqrt(3)*C.HexRadius,0,r*1.5*C.HexRadius)
 end
+function B.center(t)
+ if t.x~=nil then return C.FieldOrigin+Vector3.new((t.x+4)*5.25,0,(t.z+8)*5.9) end
+ return B.position(t.q,t.r)
+end
 local function axial(q,r) return q-math.floor(r/2),r end
 function B.distance(a,b)
+ if a.adjacent then
+  if a.id==b.id then return 0 end
+  return table.find(a.adjacent,b.id) and 1 or math.huge
+ end
  local aq,ar=axial(a.q,a.r)
  local bq,br=axial(b.q,b.r)
  local q,r=aq-bq,ar-br
  return math.max(math.abs(q),math.abs(r),math.abs(q+r))
 end
 function B.neighbors(s,t)
+ if t.adjacent then
+  local out={}
+  for _,id in ipairs(t.adjacent) do table.insert(out,s.tiles[id]) end
+  return out
+ end
  local q,r=axial(t.q,t.r)
  local list={}
  for _,d in ipairs({{1,0},{1,-1},{0,-1},{-1,0},{-1,1},{0,1}}) do
@@ -22,6 +35,13 @@ function B.neighbors(s,t)
  return list
 end
 function B.moveRange(s,unit)
+ if s.scenario=="checkpoint1" then
+  local best,prev={},{}
+  if unit.mp>0 then
+   for _,t in ipairs(B.neighbors(s,s.tiles[unit.tile])) do if not t.unit then best[t.id]=1;prev[t.id]=unit.tile end end
+  end
+  return best,prev
+ end
  local best={[unit.tile]=0}
  local previous={}
  local open={{id=unit.tile,cost=0}}

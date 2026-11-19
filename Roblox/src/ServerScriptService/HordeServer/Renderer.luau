@@ -68,6 +68,59 @@ local function rusCity(capital)
  end
  return m
 end
+-- Native map pieces also render when old rbxruntime mesh references cannot reload.
+local function mongolToken(kind)
+ local m=Instance.new("Model");m.WorldPivot=CFrame.identity
+ local bronze=C.Palette.gold:Lerp(C.Palette.wood,.22)
+ local timber=Color3.fromHex("805D48")
+ local dark=C.Palette.wood:Lerp(C.Palette.steel,.34)
+ local cloth=C.Palette.steppe:Lerp(C.Palette.steel,.13)
+ local function body(n,x,y,z,a,b,c,tint,shape,rot)
+  local p=part(m,n,Vector3.new(a,b,c),CFrame.new(x,y,z)*(rot or CFrame.identity),tint)
+  if shape then p.Shape=shape end
+ end
+ local b=Enum.PartType.Ball
+ body("Mounted army",0,.79,-.12,.82,.73,1.88,timber,b)
+ body("Raised neck",0,1.14,.52,.55,.91,.61,timber,b,CFrame.Angles(.27,0,0))
+ body("Pony head",0,1.50,.81,.49,.49,.63,timber,b)
+ body("Pony muzzle",0,1.36,1.04,.38,.32,.36,dark,b)
+ body("Tail",0,.85,-1.06,.17,.55,.25,dark,nil,CFrame.Angles(-.34,0,0))
+ for _,d in ipairs({-1,1}) do
+  body("Foreleg",d*.25,.32,.45,.16,.64,.19,timber)
+  body("Hind leg",d*.25,.30,-.60,.18,.61,.23,dark)
+  body("Saddlecloth",d*.35,.88,-.15,.14,.32,.70,cloth)
+  body("Riding boot",d*.43,1.00,-.12,.16,.44,.22,dark)
+ end
+ body("Coat",0,1.42,-.19,.50,.57,.46,cloth,b)
+ body("Fur cap",0,1.94,-.15,.45,.32,.43,dark,b)
+ body("Face",0,1.75,-.08,.36,.30,.31,Color3.fromHex("C59373"),b)
+ body("Bronze cap button",0,2.09,-.15,.12,.13,.12,bronze,b)
+ if kind=="archer" then
+  for i,angle in ipairs({-.37,.12,.57}) do body("Recurve",.37+i*.049,1.42+i*.19,.31,.074,.32,.08,bronze,nil,CFrame.Angles(0,0,angle)) end
+  body("Quiver",.27,1.40,-.42,.20,.66,.20,dark,nil,CFrame.Angles(-.21,0,-.11))
+ else
+  body("Cavalry spear",.35,1.40,.23,.085,2.18,.085,bronze,nil,CFrame.Angles(-.64,0,0))
+ end
+ return m
+end
+local function campaignGer(owner,capital)
+ local m=Instance.new("Model");m.WorldPivot=CFrame.identity
+ local ground=C.Palette.wood
+ local cream=C.Palette.snow:Lerp(ground,.11)
+ local accent=owner=="mongol" and C.Palette.gold or C.Palette.steel
+ local radius=capital and 1.48 or 1.18
+ local function cylinder(n,y,d,h,col)
+  local p=part(m,n,Vector3.new(h,d,d),CFrame.new(0,y,0)*CFrame.Angles(0,0,math.pi/2),col)
+  p.Shape=Enum.PartType.Cylinder
+ end
+ cylinder("Ger wall",.56,radius*2,1.05,cream)
+ cylinder("Felt trim",1.06,radius*2.045,.12,accent)
+ local roof=part(m,"Rounded felt roof",Vector3.new(radius*2.01,1.02,radius*2.01),CFrame.new(0,1.05,0),cream)
+ roof.Shape=Enum.PartType.Ball
+ cylinder("Smoke ring",1.58,.48,.14,ground)
+ part(m,"Wood entry",Vector3.new(.65,.90,.13),CFrame.new(0,.49,radius),ground)
+ return m
+end
 local axes={{1,0},{.5,math.sqrt(3)/2},{-.5,math.sqrt(3)/2},{-1,0},{-.5,-math.sqrt(3)/2},{.5,-math.sqrt(3)/2}}
 function R.new()
  return setmetatable({tiles={},units={},cities={},bands={},stamp={},motion={}},R)
@@ -78,19 +131,34 @@ function R:reset(s)
  local root=Instance.new("Model");root.Name="HordeWorld"
  root.ModelStreamingMode=Enum.ModelStreamingMode.Persistent
  root:SetAttribute("MapSize",s.size);root:SetAttribute("Seed",s.seed)
+ if s.scenario=="checkpoint1" then root:SetAttribute("ProvinceCount",#s.order);root:SetAttribute("MatchId",s.matchId) end
  self.world=root
  self.tileRoot=folder(root,"Tiles")
  self.borderRoot=folder(root,"Borders")
  self.unitRoot=folder(root,"Armies")
  self.cityRoot=folder(root,"Settlements")
  local props=folder(root,"Terrain Props")
- local N=s.size
- local extent=(N-1)*math.sqrt(3)*C.HexRadius
- local depth=(N-1)*1.5*C.HexRadius
- part(root,"Carved steppe map base",Vector3.new(extent+15,.75,depth+12),CFrame.new(C.FieldOrigin+Vector3.new(extent/2+2,-.46,depth/2)),C.Palette.steel,Enum.Material.Slate)
+ local lowX,highX,lowZ,highZ=math.huge,-math.huge,math.huge,-math.huge
+ for _,id in ipairs(s.order) do
+  local p=B.center(s.tiles[id])
+  lowX=math.min(lowX,p.X);highX=math.max(highX,p.X);lowZ=math.min(lowZ,p.Z);highZ=math.max(highZ,p.Z)
+ end
+ local mid=Vector3.new((lowX+highX)/2,C.FieldOrigin.Y-.54,(lowZ+highZ)/2)
+ part(root,"Campaign atlas base",Vector3.new(highX-lowX+16,.76,highZ-lowZ+16),CFrame.new(mid),
+  s.scenario=="checkpoint1" and Color3.fromHex("41534B") or C.Palette.steel,Enum.Material.Slate)
+ if s.roads then
+  local paths=folder(root,"Province Roads")
+  for _,edge in ipairs(s.roads) do
+   local a,b=B.center(s.tiles[edge[1]]),B.center(s.tiles[edge[2]])
+   local y=Vector3.new(0,-.13,0)
+   local c=(a+b)/2+y
+   local route=part(paths,edge[1].." to "..edge[2],Vector3.new(.74,.094,(b-a).Magnitude),CFrame.lookAt(c,c+(b-a)),Color3.fromHex("9D9071"))
+   route.CastShadow=false
+  end
+ end
  for _,id in ipairs(s.order) do
   local t=s.tiles[id]
-  local a=C.Terrain[t.terrain];local p=B.position(t.q,t.r)
+  local a=C.Terrain[t.terrain];local p=B.center(t)
   local slabSize=Vector3.new(C.HexRadius*math.sqrt(3)*.978,a.height+.14,C.HexRadius*.978)
   local pose=CFrame.new(p+Vector3.new(0,(a.height-.14)/2,0))
   local material=(t.terrain=="Water" or t.terrain=="Ford") and Enum.Material.SmoothPlastic or Enum.Material.Plastic
@@ -101,12 +169,25 @@ function R:reset(s)
   end
   tile.CanCollide=false;tile.CanQuery=true;tile.CanTouch=false
   tile:SetAttribute("TileId",id);tile:SetAttribute("Q",t.q);tile:SetAttribute("R",t.r);tile:SetAttribute("Terrain",t.terrain)
-  tile:SetAttribute("Traversable",a.move<99);tile:SetAttribute("MoveCost",a.move)
+  tile:SetAttribute("Traversable",a.move<99);tile:SetAttribute("MoveCost",s.roads and 1 or a.move)
+  tile:SetAttribute("ProvinceName",t.name)
   tile:SetAttribute("Resource",a.resource)
   tile.Parent=self.tileRoot;self.tiles[id]=tile
-  local idx=(t.q*113+t.r*73+s.seed)%7
+  local idx=not s.roads and (t.q*113+t.r*73+s.seed)%7 or 0
   local name,scale
-  if not t.city then
+  if s.roads and (t.terrain=="Forest" or t.terrain=="Hills") then
+   local at=p+Vector3.new(2.4,a.height,-1.2)
+   if t.terrain=="Forest" then
+    part(props,"Pine trunk",Vector3.new(.18,.89,.18),CFrame.new(at+Vector3.new(0,.44,0)),C.Palette.wood)
+    for i=0,2 do
+     local crown=part(props,"Pine crown",Vector3.new(.70-i*.12,.70-i*.12,.70-i*.12),CFrame.new(at+Vector3.new(0,.82+i*.23,0)),Color3.fromHex("405842"))
+     crown.Shape=Enum.PartType.Ball
+    end
+   else
+    local rock=part(props,"Steppe stone",Vector3.new(.89,.49,.62),CFrame.new(at+Vector3.new(0,.23,0)),Color3.fromHex("8D8570"))
+    rock.Shape=Enum.PartType.Ball
+   end
+  elseif not s.roads and not t.city then
    if t.terrain=="Forest" and idx<5 then name=idx%2==0 and "Steppe_Tree_Pine" or "Steppe_Tree_Broadleaf";scale=.34
    elseif t.terrain=="Mountains" then name="Steppe_Rock";scale=.64
    elseif t.terrain=="Hills" and idx<3 then name="Steppe_Rock";scale=.31 end
@@ -119,7 +200,7 @@ function R:reset(s)
  root.Parent=workspace
 end
 function R:surface(t)
- return B.position(t.q,t.r)+Vector3.new(0,C.Terrain[t.terrain].height,0)
+ return B.center(t)+Vector3.new(0,C.Terrain[t.terrain].height,0)
 end
 function R:unitPose(s,u,tileId)
  local t=s.tiles[tileId]
@@ -164,9 +245,11 @@ function R:ownerOverlay(s,t)
   for i,axis in ipairs(axes) do
    local axisV=Vector3.new(axis[1],0,axis[2])
    local adjacentOwner="edge"
-   for _,n in ipairs(adjacent) do
-    local offset=B.position(n.q,n.r)-B.position(t.q,t.r)
-    if offset.Unit:Dot(axisV)>.998 then adjacentOwner=n.owner;break end
+   if not s.roads then
+    for _,n in ipairs(adjacent) do
+     local offset=B.center(n)-B.center(t)
+     if offset.Unit:Dot(axisV)>.998 then adjacentOwner=n.owner;break end
+    end
    end
    if adjacentOwner~=owner then draw[i]=axisV;pattern..=tostring(i) end
   end
@@ -206,8 +289,13 @@ function R:update(s)
    local m=self.units[id]
    if not m then
     local cf=self:unitPose(s,u,u.tile)
-    if u.faction=="mongol" then m=clone(assets.Units[C.Units[u.kind].asset],id,cf,C.AssetScale) else m=rusUnit(u.kind);m:PivotTo(cf) end
+    if s.roads then
+     m=u.faction=="mongol" and mongolToken(u.kind) or rusUnit(u.kind)
+     m:PivotTo(cf)
+    elseif u.faction=="mongol" then m=clone(assets.Units[C.Units[u.kind].asset],id,cf,C.AssetScale)
+    else m=rusUnit(u.kind);m:PivotTo(cf) end
     m.Name=id;m.Parent=self.unitRoot;self.units[id]=m
+    if not s.roads then
     local anchor=m:FindFirstChildWhichIsA("BasePart",true)
     local gui=label(anchor,C.Units[u.kind].name,C.Palette.snow)
     gui.Name="Health";gui.StudsOffsetWorldSpace=Vector3.new(0,u.faction=="mongol" and 2.45 or 1.23,0);gui.Size=UDim2.fromOffset(69,17)
@@ -215,11 +303,15 @@ function R:update(s)
     hp.Name="HP";hp.TextSize=10
     local bar=Instance.new("Frame");bar.Name="Bar";bar.BorderSizePixel=0;bar.BackgroundColor3=C.Factions[u.faction].color
     bar.Size=UDim2.fromScale(1,.16);bar.Position=UDim2.fromScale(0,.84);bar.Parent=hp
+    end
    elseif routes[id] or strikes[id] then self:animate(m,u,s,routes[id],strikes[id]) end
    m:SetAttribute("TileId",u.tile);m:SetAttribute("Faction",u.faction)
    m:SetAttribute("HP",u.hp);m:SetAttribute("MaxHP",u.maxHp);m:SetAttribute("Kind",u.kind)
-   local hp=m:FindFirstChild("Health",true).HP;hp.Text=u.hp.." / "..u.maxHp
-   hp.Bar.Size=UDim2.fromScale(u.hp/u.maxHp,.16)
+   local health=m:FindFirstChild("Health",true)
+   if health then
+    health.HP.Text=u.hp.." / "..u.maxHp
+    health.HP.Bar.Size=UDim2.fromScale(u.hp/u.maxHp,.16)
+   end
   end
  end
  for _,id in ipairs(s.cityOrder) do
@@ -230,6 +322,7 @@ function R:update(s)
    local base=CFrame.new(self:surface(t)+Vector3.new(-.71,0,-.71))
    local city
    if c.owner=="rus" and not c.buildings.fortress then city=rusCity(c.capital);city:PivotTo(base)
+   elseif s.roads then city=campaignGer(c.owner,c.capital);city:PivotTo(base)
    else
     local name=c.buildings.fortress and "Mongol_Fortress" or c.capital and "Mongol_CapitalYurt" or "Mongol_Yurt"
     city=clone(assets.Buildings[name],id,base,c.buildings.fortress and .44 or .64)
@@ -242,7 +335,9 @@ function R:update(s)
    city.Name=id;city.Parent=self.cityRoot
    local flagParent=part(city,"City marker",Vector3.new(.2,.2,.2),base+Vector3.new(0,2.92,0),C.Palette.steel)
    flagParent.Transparency=1
-   label(flagParent,c.name,c.owner=="neutral" and C.Palette.snow or C.Factions[c.owner].color).StudsOffsetWorldSpace=Vector3.new(0,.10,0)
+   if not s.roads then
+    label(flagParent,c.name,c.owner=="neutral" and C.Palette.snow or C.Factions[c.owner].color).StudsOffsetWorldSpace=Vector3.new(0,.10,0)
+   end
    if c.buildings.farm then
     for i=1,3 do part(city,"Crop row",Vector3.new(.26,.13,1.35),base*CFrame.new(-1.50+i*.30,.065,2.6),C.Palette.steppe,Enum.Material.Ground) end
    end

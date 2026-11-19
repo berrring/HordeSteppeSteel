@@ -33,32 +33,31 @@
 ---
 
 ## ADR-003: Grounded Combat Calculator Extraction
-- **Developer:** Iskender (Combat Math & AI)
-- **Date:** [Fill upon implementation]
-- **Status:** PROPOSED
-- **Decision:** 
-- **Context & Problem:** 
-- **Alternatives Considered:** 
-- **Why Selected:** 
-- **Files Modified:** 
-- **Verification Method:** 
-- **Live Defense Demonstration:** 
+- **Provisional owner:** Iskender (combat and AI).
+- **Status:** Superseded for Roblox Checkpoint 1. The original planning entry was proposed.
+- **Roblox decision:** Keep one server damage calculation in `HordeServer.Match`. The checkpoint adds adjacency, a single order budget, retaliation, removal, and capture around that calculation. Rus and Mongol use the same functions. The client renders the returned report.
+- **Historical reference:** [Godot battle calculator](legacy/godot-reference/scripts/combat/battle_calculator.gd) remains archived.
+- **Verification:** See the live Kiev battle in [CP1-07](Roblox/docs/Checkpoint1-Manual.md#manual-checklist).
 
 ---
 
 ## ADR-004: Dual-Mode Camera Projection & Topography
-- **Developer:** Alen (Map, Camera & Visuals)
-- **Date:** [Fill upon implementation]
-- **Status:** PROPOSED
-- **Decision:** 
-- **Context & Problem:** 
-- **Alternatives Considered:** 
-- **Why Selected:** 
-- **Files Modified:** 
-- **Verification Method:** 
-- **Live Defense Demonstration:** 
+- **Provisional owner:** Alen (map and visuals).
+- **Status:** Superseded for Roblox Checkpoint 1. The original planning entry was proposed.
+- **Roblox decision:** Retain the scriptable strategy camera, pan, zoom, rotation and focus. Center the camera from the authored province bounds. Project province and army markers over a native 3D atlas. Roads in `HordeShared.Provinces`, rather than camera projection or visual proximity, define adjacency.
+- **Verification:** Province display, markers and marching are exercised in the [Studio checklist](Roblox/docs/Checkpoint1-Manual.md).
 
-## 2026-11-05 — Campaign command and turn contract
+## ADR-005: Move to Roblox
+
+- **Date recorded:** 2026-11-19. The named Checkpoint 1 milestone is November 26, 2026.
+- **Decision owners:** Team Arsenal. Individual approval and formal signoff have not been recorded. Subsystem responsibilities in the README are provisional.
+- **Context:** The November 5 record below describes an active Godot implementation. The first Roblox implementation is documented by commits `09d3cd0`, `4c2575e`, and `e5ab5aa` on `roblox-playable-slice`. The Checkpoint 1 brief names the existing Roblox place as the demo target.
+- **Decision and rationale:** Continue in Roblox Studio. The existing place already integrated the Mongol art library, tactical UI, and a client/server campaign prototype. Roblox provides a single Studio environment for the map, server, client, and Play-mode review. Earlier team deliberations on engine choice are not documented here.
+- **Carried forward:** Twelve province names, positions and eighteen road links from the archived Godot full campaign, Mongol and Rus identities, turn-based orders, resource yields, and the five-color visual direction. The checkpoint adapts these to Roblox Luau and the existing Roblox damage calculation.
+- **Postponed:** Extra maps and factions, Godot's separate tactical scene and replay, recruitment and construction, border reinforcement and economic AI, a Rus victory condition based on taking Sarai, and persistent saves.
+- **Technical consequences:** Use an `.rbxl` place for the demo. Server scripts own orders, resources and phase changes. The client requests orders and displays snapshots. The old Godot logic stays available for reference. Roblox verification has its own [record](Roblox/docs/Checkpoint1-Manual.md).
+
+## 2026-11-05 — Historical Godot campaign command and turn contract
 
 - Integrated Alen camera/terrain changes before campaign repairs.
 - Godot remains the implementation; the pasted Unity plan supplies gameplay

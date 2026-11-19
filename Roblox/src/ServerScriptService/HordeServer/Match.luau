@@ -1,5 +1,6 @@
 local C=require(game.ReplicatedStorage.HordeShared.Config)
 local B=require(game.ReplicatedStorage.HordeShared.Board)
+local Provinces=require(game.ReplicatedStorage.HordeShared.Provinces)
 local M={}
 local function copy(x)
  if type(x)~="table" then return x end
@@ -14,6 +15,13 @@ function M.cityDefense(city)
 end
 function M.income(s,f)
  local out={gold=0,food=0,wood=0}
+ if s.scenario=="checkpoint1" then
+  for _,id in ipairs(s.order) do
+   local p=s.tiles[id]
+   if p.owner==f then for k,v in pairs(p.yield) do out[k]+=v end end
+  end
+  return out
+ end
  local raw={gold=0,food=0,wood=0}
  for _,id in ipairs(s.cityOrder) do
   local city=s.cities[id]
@@ -41,6 +49,15 @@ function M.income(s,f)
  return out
 end
 local function claim(s,t,owner)
+ if s.scenario=="checkpoint1" then
+  if t.owner==owner then return end
+  t.owner=owner
+  if t.city then s.cities[t.city].owner=owner end
+  s.stats.captures[owner]+=1
+  table.insert(s.events,{kind="capture",tile=t.id,text=t.name.." captured by "..C.Factions[owner].name.."."})
+  if owner=="mongol" and t.id=="novgorod" then s.result="mongol";s.endReason="Novgorod secured" end
+  return
+ end
  t.owner=owner
  if not t.city then return end
  local c=s.cities[t.city]
@@ -57,7 +74,8 @@ local function claim(s,t,owner)
   table.insert(s.events,{kind="capture",tile=t.id,text=c.name.." captured by "..C.Factions[owner].name.."."})
  end
 end
-local function resetBudget(u)
+local function resetBudget(s,u)
+ if s.scenario=="checkpoint1" then u.mp=1;u.attacked=false;return end
  local def=C.Units[u.kind]
  u.mp=def.move+(u.faction=="mongol" and def.mounted and 1 or 0)
  u.attacked=false
@@ -68,7 +86,7 @@ local function spawn(s,f,kind,t,ready)
  local def=C.Units[kind]
  local id="U"..s.serial
  local u={id=id,faction=f,kind=kind,tile=t.id,hp=def.hp,maxHp=def.hp,mp=0,attacked=true}
- if ready then resetBudget(u) end
+ if ready then resetBudget(s,u) end
  s.units[id]=u;table.insert(s.unitOrder,id);t.unit=id
  return u
 end
@@ -92,6 +110,19 @@ function M.new(n,seed)
  end
  return s
 end
+function M.newCheckpoint(matchId)
+ local s=Provinces.new()
+ s.matchId=matchId;s.turn=1;s.active="mongol";s.serial=0;s.units={};s.unitOrder={};s.events={};s.rusTurns=0
+ s.resources={mongol=copy(C.Start),rus=copy(C.Start)}
+ s.stats={kills={mongol=0,rus=0},captures={mongol=0,rus=0},recruits={mongol=0,rus=0}}
+ spawn(s,"mongol","archer",s.tiles.sarai,true)
+ spawn(s,"mongol","light",s.tiles.urgench,true)
+ local kiev=spawn(s,"rus","infantry",s.tiles.kiev,false)
+ kiev.hp=5
+ spawn(s,"rus","spear",s.tiles.moscow,false)
+ spawn(s,"rus","infantry",s.tiles.novgorod,false)
+ return s
+end
 local function action(s,f)
  return not s.result and s.active==f
 end
@@ -107,7 +138,14 @@ function M.move(s,f,id,dest)
  local t=s.tiles[dest]
  if not t then return false,"That tile is outside the map." end
  local costs,prev=B.moveRange(s,u)
- if not costs[dest] then return false,"Destination is blocked or out of movement range." end
+ if not costs[dest] then
+  if s.scenario=="checkpoint1" then
+   if u.mp==0 then return false,"This army has already acted this turn." end
+   if B.distance(s.tiles[u.tile],t)~=1 then return false,"No road connects these provinces." end
+   if t.unit then return false,"The province is occupied. Select an enemy army to attack." end
+  end
+  return false,"Destination is blocked or out of movement range."
+ end
  local route={dest}
  local k=dest
  while prev[k] and prev[k]~=u.tile do k=prev[k];table.insert(route,1,k) end
@@ -116,7 +154,7 @@ function M.move(s,f,id,dest)
  u.mp-=costs[dest]
  table.insert(s.events,{kind="move",unit=id,from=from,route=route})
  claim(s,t,f)
- return true,"Moved "..C.Units[u.kind].name.."."
+ return true,s.scenario=="checkpoint1" and (C.Units[u.kind].name.." marched to "..t.name..".") or ("Moved "..C.Units[u.kind].name..".")
 end
 function M.damage(s,u,target)
  local def=C.Units[u.kind]
@@ -126,11 +164,47 @@ function M.damage(s,u,target)
  local power=def.attack+(u.kind=="spear" and td.mounted and 4 or 0)
  return math.max(2,power-math.floor(mitigation*.57))
 end
+local function provinceCombat(s,u,enemy)
+ if u.mp<1 or u.attacked then return false,"This army has already acted this turn." end
+ local source,dest=s.tiles[u.tile],s.tiles[enemy.tile]
+ if B.distance(source,dest)~=1 then return false,"No road connects these armies." end
+ if dest.owner~=enemy.faction then return false,"The defending army does not control this province." end
+ local damage=math.min(enemy.hp,M.damage(s,u,enemy))
+ local routed=enemy.hp<=damage
+ local retaliation=math.min(u.hp,math.max(1,math.floor(M.damage(s,enemy,u)*(routed and .35 or .65))))
+ enemy.hp-=damage;u.hp-=retaliation;u.mp=0;u.attacked=true
+ local attackerRouted=u.hp==0
+ local mongolLoss=u.faction=="mongol" and retaliation or damage
+ local rusLoss=u.faction=="rus" and retaliation or damage
+ local report=string.format("%s: Mongol −%d, Rus −%d. %s",dest.name,mongolLoss,rusLoss,
+  routed and (attackerRouted and "Both armies routed." or "Defenders routed. Province captured.") or (attackerRouted and "Attacker routed." or "Defenders hold."))
+ local attack={kind="attack",unit=u.id,target=enemy.id,from=source.id,tile=dest.id,damage=damage,retaliation=retaliation,defeated=routed,attackerRouted=attackerRouted,text=report}
+ table.insert(s.events,attack)
+ if attackerRouted then
+  s.units[u.id]=nil;source.unit=nil;s.stats.kills[enemy.faction]+=1
+ end
+ if routed then
+  s.units[enemy.id]=nil;dest.unit=nil;s.stats.kills[u.faction]+=1
+  if not attackerRouted then
+   source.unit=nil;dest.unit=u.id;u.tile=dest.id
+   table.insert(s.events,{kind="move",unit=u.id,from=source.id,route={dest.id}})
+   claim(s,dest,u.faction)
+  end
+ end
+ local mongol,rus=false,false
+ for _,a in pairs(s.units) do
+  if a.faction=="mongol" then mongol=true else rus=true end
+ end
+ if not mongol then s.result="rus";s.endReason="Mongol armies routed"
+ elseif not rus and not s.result then s.result="mongol";s.endReason="Rus armies routed" end
+ return true,report
+end
 function M.attack(s,f,id,targetId)
  local u,msg=access(s,f,id)
  if not u then return false,msg end
  local t=s.units[targetId]
  if not t or t.faction==f then return false,"Choose an enemy unit." end
+ if s.scenario=="checkpoint1" then return provinceCombat(s,u,t) end
  if u.attacked then return false,"This unit has already attacked." end
  if B.distance(s.tiles[u.tile],s.tiles[t.tile])>C.Units[u.kind].range then return false,"Enemy is beyond attack range." end
  local damage=M.damage(s,u,t)
@@ -196,7 +270,7 @@ function M.begin(s,f)
  for k,v in pairs(income) do s.resources[f][k]+=v end
  for _,id in ipairs(s.unitOrder) do
   local u=s.units[id]
-  if u and u.faction==f then resetBudget(u) end
+  if u and u.faction==f then resetBudget(s,u) end
  end
  return income
 end
