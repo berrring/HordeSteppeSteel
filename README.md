@@ -30,3 +30,5 @@ The match is single commander per server. The playable board uses native army mi
 - [Architecture decisions](DECISION_LOG.md)
 - [AI transparency log](AI_TRANSPARENCY.md)
 - [Archived Godot rules](legacy/godot-reference/README.md)
+
+The retired Python prototype is available in Git history at `6076eca`.
