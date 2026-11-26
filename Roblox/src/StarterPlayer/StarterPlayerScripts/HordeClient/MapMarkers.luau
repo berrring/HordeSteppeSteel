@@ -31,7 +31,7 @@ function M.new(playerGui)
    if tile and tile:IsA("BasePart") then
     local tint=province.owner=="mongol" and S.C.brass or province.owner=="rus" and S.C.red or S.C.dim
     local name=province.name
-    marker("Province_"..id,name,tile,Vector3.new(-.28,2.56,-.89),math.clamp(#name*5+13,37,94),19,tint,false,
+    marker("Province_"..id,name,tile,Vector3.new(-.65,3.25,-1),math.clamp(#name*5+13,37,94),19,tint,false,
      function() onPick(id,true) end,2)
    end
   end
@@ -40,7 +40,7 @@ function M.new(playerGui)
    local tile=u and tiles:FindFirstChild(u.tile)
    if tile and tile:IsA("BasePart") then
     local t=state.tiles[u.tile]
-    marker("Army_"..id,string.format("%s  %d",names[u.kind],u.hp),tile,t.city and Vector3.new(1.26,.91,1.52) or Vector3.new(0,1.05,0),
+    marker("Army_"..id,string.format("%s  %d",names[u.kind],u.hp),tile,t.city and Vector3.new(1.95,1.52,2.32) or Vector3.new(.98,1.38,1.02),
      compact and 39 or 45,18,u.faction=="mongol" and S.C.brass or S.C.red,selected==id,function() onPick(u.tile,false) end,3)
    end
   end

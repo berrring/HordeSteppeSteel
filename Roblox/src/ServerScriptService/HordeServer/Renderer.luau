@@ -1,5 +1,6 @@
 local C=require(game.ReplicatedStorage.HordeShared.Config)
 local B=require(game.ReplicatedStorage.HordeShared.Board)
+local Art=require(script.Parent.CampaignArt)
 local assets=game.ServerStorage:WaitForChild("HordeAssets")
 local Tween=game:GetService("TweenService")
 local R={}
@@ -69,59 +70,72 @@ local function rusCity(capital)
  return m
 end
 -- Native map pieces also render when old rbxruntime mesh references cannot reload.
-local function mongolToken(kind)
- local m=Instance.new("Model");m.WorldPivot=CFrame.identity
- local bronze=C.Palette.gold:Lerp(C.Palette.wood,.22)
- local timber=Color3.fromHex("805D48")
- local dark=C.Palette.wood:Lerp(C.Palette.steel,.34)
- local cloth=C.Palette.steppe:Lerp(C.Palette.steel,.13)
- local function body(n,x,y,z,a,b,c,tint,shape,rot)
-  local p=part(m,n,Vector3.new(a,b,c),CFrame.new(x,y,z)*(rot or CFrame.identity),tint)
-  if shape then p.Shape=shape end
- end
- local b=Enum.PartType.Ball
- body("Mounted army",0,.79,-.12,.82,.73,1.88,timber,b)
- body("Raised neck",0,1.14,.52,.55,.91,.61,timber,b,CFrame.Angles(.27,0,0))
- body("Pony head",0,1.50,.81,.49,.49,.63,timber,b)
- body("Pony muzzle",0,1.36,1.04,.38,.32,.36,dark,b)
- body("Tail",0,.85,-1.06,.17,.55,.25,dark,nil,CFrame.Angles(-.34,0,0))
- for _,d in ipairs({-1,1}) do
-  body("Foreleg",d*.25,.32,.45,.16,.64,.19,timber)
-  body("Hind leg",d*.25,.30,-.60,.18,.61,.23,dark)
-  body("Saddlecloth",d*.35,.88,-.15,.14,.32,.70,cloth)
-  body("Riding boot",d*.43,1.00,-.12,.16,.44,.22,dark)
- end
- body("Coat",0,1.42,-.19,.50,.57,.46,cloth,b)
- body("Fur cap",0,1.94,-.15,.45,.32,.43,dark,b)
- body("Face",0,1.75,-.08,.36,.30,.31,Color3.fromHex("C59373"),b)
- body("Bronze cap button",0,2.09,-.15,.12,.13,.12,bronze,b)
- if kind=="archer" then
-  for i,angle in ipairs({-.37,.12,.57}) do body("Recurve",.37+i*.049,1.42+i*.19,.31,.074,.32,.08,bronze,nil,CFrame.Angles(0,0,angle)) end
-  body("Quiver",.27,1.40,-.42,.20,.66,.20,dark,nil,CFrame.Angles(-.21,0,-.11))
- else
-  body("Cavalry spear",.35,1.40,.23,.085,2.18,.085,bronze,nil,CFrame.Angles(-.64,0,0))
- end
- return m
-end
-local function campaignGer(owner,capital)
- local m=Instance.new("Model");m.WorldPivot=CFrame.identity
- local ground=C.Palette.wood
- local cream=C.Palette.snow:Lerp(ground,.11)
- local accent=owner=="mongol" and C.Palette.gold or C.Palette.steel
- local radius=capital and 1.48 or 1.18
- local function cylinder(n,y,d,h,col)
-  local p=part(m,n,Vector3.new(h,d,d),CFrame.new(0,y,0)*CFrame.Angles(0,0,math.pi/2),col)
-  p.Shape=Enum.PartType.Cylinder
- end
- cylinder("Ger wall",.56,radius*2,1.05,cream)
- cylinder("Felt trim",1.06,radius*2.045,.12,accent)
- local roof=part(m,"Rounded felt roof",Vector3.new(radius*2.01,1.02,radius*2.01),CFrame.new(0,1.05,0),cream)
- roof.Shape=Enum.PartType.Ball
- cylinder("Smoke ring",1.58,.48,.14,ground)
- part(m,"Wood entry",Vector3.new(.65,.90,.13),CFrame.new(0,.49,radius),ground)
- return m
-end
 local axes={{1,0},{.5,math.sqrt(3)/2},{-.5,math.sqrt(3)/2},{-1,0},{-.5,-math.sqrt(3)/2},{.5,-math.sqrt(3)/2}}
+local function hitbox(m,id,pose,size)
+ local p=part(m,"Selection bounds",size,pose,C.Palette.ink)
+ p.Transparency=1;p.CanQuery=true;p:SetAttribute("TileId",id)
+ return p
+end
+
+local function atlas(root,lowX,highX,lowZ,highZ,mid)
+ local w,d=highX-lowX+18,highZ-lowZ+18
+ part(root,"Layered earth",Vector3.new(w+1.4,.65,d+1.4),CFrame.new(mid-Vector3.new(0,.75,0)),Color3.fromHex("5D5142"),Enum.Material.Slate)
+ part(root,"Steppe surface",Vector3.new(w,.76,d),CFrame.new(mid),Color3.fromHex("647353"),Enum.Material.Grass)
+ local rivers=folder(root,"River valleys")
+ local spans={}
+ local landscape=folder(root,"Regional landscape")
+ local function point(x,z)
+  return Vector3.new(lowX+x*(highX-lowX),C.FieldOrigin.Y-.125,lowZ+z*(highZ-lowZ))
+ end
+ local course={{-.07,-.10},{.04,.09},{.19,.19},{.24,.35},{.19,.49},{.22,.66},{.17,.82},{.36,1.10}}
+ for i=1,#course-1 do
+  local a,b=point(table.unpack(course[i])),point(table.unpack(course[i+1]))
+  table.insert(spans,{a,b})
+  local center=(a+b)/2
+  local length=(b-a).Magnitude
+  local cf=CFrame.lookAt(center,b)
+  part(rivers,"Gravel banks",Vector3.new(2.14,.055,length+1.18),cf,Color3.fromHex("8E9270"),Enum.Material.Ground).CastShadow=false
+  part(rivers,"River",Vector3.new(1.49,.060,length+.85),cf+Vector3.new(0,.023,0),Color3.fromHex("537E82")).CastShadow=false
+ end
+ local regions={{.34,.07,3.6,"Steppe_Tree_Pine"},{.53,.23,3.5,"Steppe_Tree_Pine"},
+  {.84,.11,4.5,"Steppe_Rock"},{.94,.51,3.5,"Steppe_Rock"},{.66,.68,4.5,"Steppe_Rock"},
+  {.48,.83,3.2,"Steppe_Tree_Broadleaf"},{.78,.91,3.5,"Steppe_Tree_Broadleaf"}}
+ for i,region in ipairs(regions) do
+  local center=point(region[1],region[2])
+  local radius,name=region[3],region[4]
+  local hill=part(landscape,"Low ridge",Vector3.new(radius*1.9,.77,radius*1.15),
+   CFrame.new(center-Vector3.new(0,.21,0))*CFrame.Angles(0,i*.67,0),Color3.fromHex("6C7656"),Enum.Material.Grass)
+  hill.Shape=Enum.PartType.Ball
+  for j=1,3 do
+   local p=center+Vector3.new((j-2)*1.33,.10,(j%2-.5)*1.7)
+   Art.place("Environment",name,CFrame.new(p)*CFrame.Angles(0,i+j,0),.33+(j%2)*.08).Parent=landscape
+  end
+ end
+ local fort=Art.place("Buildings","Mongol_Fortress",CFrame.new(point(.74,.28)+Vector3.new(0,.04,0))*CFrame.Angles(0,.42,0),.28)
+ fort.Name="Frontier palisade";fort.Parent=landscape
+ return spans
+end
+
+local function bridge(paths,a,b,spans)
+ local direction=b-a
+ local function det(u,v) return u.X*v.Z-u.Z*v.X end
+ for _,span in ipairs(spans) do
+  local from,to=table.unpack(span)
+  local river=to-from
+  local denominator=det(direction,river)
+  if math.abs(denominator)<.001 then continue end
+  local t,u=det(from-a,river)/denominator,det(from-a,direction)/denominator
+  if t>.11 and t<.89 and u>=0 and u<1 then
+   local p=a+direction*t
+   local deck=CFrame.lookAt(p,p+direction)
+   part(paths,"Timber crossing",Vector3.new(1.10,.16,2.45),deck,Color3.fromHex("998368"),Enum.Material.WoodPlanks)
+   for _,side in ipairs({-.50,.50}) do
+    part(paths,"Bridge rail",Vector3.new(.12,.17,2.4),deck*CFrame.new(side,.10,0),C.Palette.wood,Enum.Material.Wood)
+   end
+  end
+ end
+end
+
 function R.new()
  return setmetatable({tiles={},units={},cities={},bands={},stamp={},motion={}},R)
 end
@@ -144,16 +158,19 @@ function R:reset(s)
   lowX=math.min(lowX,p.X);highX=math.max(highX,p.X);lowZ=math.min(lowZ,p.Z);highZ=math.max(highZ,p.Z)
  end
  local mid=Vector3.new((lowX+highX)/2,C.FieldOrigin.Y-.54,(lowZ+highZ)/2)
- part(root,"Campaign atlas base",Vector3.new(highX-lowX+16,.76,highZ-lowZ+16),CFrame.new(mid),
-  s.scenario=="checkpoint1" and Color3.fromHex("41534B") or C.Palette.steel,Enum.Material.Slate)
+ local spans
+ if s.roads then spans=atlas(root,lowX,highX,lowZ,highZ,mid)
+ else part(root,"Campaign atlas base",Vector3.new(highX-lowX+16,.76,highZ-lowZ+16),CFrame.new(mid),C.Palette.steel,Enum.Material.Slate) end
  if s.roads then
   local paths=folder(root,"Province Roads")
+  local crossings=folder(root,"River Crossings")
   for _,edge in ipairs(s.roads) do
    local a,b=B.center(s.tiles[edge[1]]),B.center(s.tiles[edge[2]])
-   local y=Vector3.new(0,-.13,0)
+   local y=Vector3.new(0,-.052,0)
    local c=(a+b)/2+y
-   local route=part(paths,edge[1].." to "..edge[2],Vector3.new(.74,.094,(b-a).Magnitude),CFrame.lookAt(c,c+(b-a)),Color3.fromHex("9D9071"))
+   local route=part(paths,edge[1].." to "..edge[2],Vector3.new(.63,.065,(b-a).Magnitude),CFrame.lookAt(c,c+(b-a)),Color3.fromHex("A39873"),Enum.Material.Ground)
    route.CastShadow=false
+   bridge(crossings,a+y,b+y,spans)
   end
  end
  for _,id in ipairs(s.order) do
@@ -175,17 +192,16 @@ function R:reset(s)
   tile.Parent=self.tileRoot;self.tiles[id]=tile
   local idx=not s.roads and (t.q*113+t.r*73+s.seed)%7 or 0
   local name,scale
-  if s.roads and (t.terrain=="Forest" or t.terrain=="Hills") then
-   local at=p+Vector3.new(2.4,a.height,-1.2)
-   if t.terrain=="Forest" then
-    part(props,"Pine trunk",Vector3.new(.18,.89,.18),CFrame.new(at+Vector3.new(0,.44,0)),C.Palette.wood)
-    for i=0,2 do
-     local crown=part(props,"Pine crown",Vector3.new(.70-i*.12,.70-i*.12,.70-i*.12),CFrame.new(at+Vector3.new(0,.82+i*.23,0)),Color3.fromHex("405842"))
-     crown.Shape=Enum.PartType.Ball
-    end
-   else
-    local rock=part(props,"Steppe stone",Vector3.new(.89,.49,.62),CFrame.new(at+Vector3.new(0,.23,0)),Color3.fromHex("8D8570"))
-    rock.Shape=Enum.PartType.Ball
+  if s.roads then
+   local ground=Art.place("Environment","Steppe_GrassTile",CFrame.new(p+Vector3.new(0,-.54,0)),.66)
+   ground.Name=id.." turf";ground.Parent=props
+   local key=t.terrain=="Forest" and "Steppe_Tree_Pine" or t.terrain=="Hills" and "Steppe_Rock" or "Steppe_Tree_Broadleaf"
+   local count=t.terrain=="Forest" and 3 or 2
+   for j=1,count do
+    local x=j==2 and 2.5 or -2.6
+    local z=j==1 and -2 or j==2 and -1.68 or .3
+    local model=Art.place("Environment",key,CFrame.new(p+Vector3.new(x,a.height-.03,z))*CFrame.Angles(0,j*1.2,0),.27+j*.025)
+    model.Name=id.." "..key.." "..j;model.Parent=props
    end
   elseif not s.roads and not t.city then
    if t.terrain=="Forest" and idx<5 then name=idx%2==0 and "Steppe_Tree_Pine" or "Steppe_Tree_Broadleaf";scale=.34
@@ -204,8 +220,8 @@ function R:surface(t)
 end
 function R:unitPose(s,u,tileId)
  local t=s.tiles[tileId]
- local offset=t.city and Vector3.new(1.26,0,1.52) or Vector3.zero
- return CFrame.new(self:surface(t)+offset)*CFrame.Angles(0,u.faction=="mongol" and math.pi/2 or -math.pi/2,0)
+ local offset=t.city and Vector3.new(1.50,0,1.76) or Vector3.zero
+ return CFrame.new(self:surface(t)+offset)*CFrame.Angles(0,u.faction=="mongol" and -.72 or .12,0)
 end
 function R:animate(m,u,s,route,strike)
  local key=u.id
@@ -290,8 +306,12 @@ function R:update(s)
    if not m then
     local cf=self:unitPose(s,u,u.tile)
     if s.roads then
-     m=u.faction=="mongol" and mongolToken(u.kind) or rusUnit(u.kind)
-     m:PivotTo(cf)
+     if u.faction=="mongol" then
+      m=Art.place("Units",C.Units[u.kind].asset,cf,.67)
+     else
+      m=rusUnit(u.kind);m:ScaleTo(1.19);m:PivotTo(cf)
+     end
+     hitbox(m,u.tile,cf*CFrame.new(0,1.05,0),Vector3.new(1.56,2.25,u.faction=="mongol" and 2.75 or 1.32))
     elseif u.faction=="mongol" then m=clone(assets.Units[C.Units[u.kind].asset],id,cf,C.AssetScale)
     else m=rusUnit(u.kind);m:PivotTo(cf) end
     m.Name=id;m.Parent=self.unitRoot;self.units[id]=m
@@ -306,6 +326,7 @@ function R:update(s)
     end
    elseif routes[id] or strikes[id] then self:animate(m,u,s,routes[id],strikes[id]) end
    m:SetAttribute("TileId",u.tile);m:SetAttribute("Faction",u.faction)
+   local bounds=m:FindFirstChild("Selection bounds");if bounds then bounds:SetAttribute("TileId",u.tile) end
    m:SetAttribute("HP",u.hp);m:SetAttribute("MaxHP",u.maxHp);m:SetAttribute("Kind",u.kind)
    local health=m:FindFirstChild("Health",true)
    if health then
@@ -321,8 +342,20 @@ function R:update(s)
    if self.cities[id] then self.cities[id].model:Destroy() end
    local base=CFrame.new(self:surface(t)+Vector3.new(-.71,0,-.71))
    local city
-   if c.owner=="rus" and not c.buildings.fortress then city=rusCity(c.capital);city:PivotTo(base)
-   elseif s.roads then city=campaignGer(c.owner,c.capital);city:PivotTo(base)
+   if s.roads then
+    if c.owner=="rus" then
+     city=Art.rusSettlement(c.capital);city:PivotTo(base)
+    else
+     local asset=c.buildings.fortress and "Mongol_Fortress" or c.capital and "Mongol_CapitalYurt" or "Mongol_Yurt"
+     city=Art.place("Buildings",asset,base,c.capital and .50 or .51)
+    end
+    hitbox(city,c.tile,base*CFrame.new(0,.78,0),Vector3.new(2.45,1.55,2.35))
+    local name=c.owner=="neutral" and "Neutral standard" or "Faction standard"
+    if c.owner=="mongol" then
+     local flag=Art.place("Buildings","Mongol_BannerPole",base*CFrame.new(-1.97,0,.48),.46)
+     flag.Name=name;flag.Parent=city
+    end
+   elseif c.owner=="rus" and not c.buildings.fortress then city=rusCity(c.capital);city:PivotTo(base)
    else
     local name=c.buildings.fortress and "Mongol_Fortress" or c.capital and "Mongol_CapitalYurt" or "Mongol_Yurt"
     city=clone(assets.Buildings[name],id,base,c.buildings.fortress and .44 or .64)

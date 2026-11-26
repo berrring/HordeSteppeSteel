@@ -19,7 +19,7 @@ local function pan(dx,dy)
  target-=right*dx*(zoom/670)
  target+=back*dy*(zoom/670)
 end
-function Camera.configure(state,first)
+function Camera.configure(state)
  local a,b=B.center(state.tiles[state.order[1]]),B.center(state.tiles[state.order[1]])
  for _,id in ipairs(state.order) do
   local p=B.center(state.tiles[id])
@@ -27,16 +27,21 @@ function Camera.configure(state,first)
   b=Vector3.new(math.max(b.X,p.X),p.Y,math.max(b.Z,p.Z))
  end
  minX=a.X-8;maxX=b.X+8;minZ=a.Z-8;maxZ=b.Z+8
- target=first or (a+b)/2
+ target=(a+b)/2
+ yaw=math.rad(18);smoothYaw=yaw
  focus=target
- zoom=93;smoothed=zoom
+ local view=workspace.CurrentCamera.ViewportSize
+ local aspect=math.max(.6,view.X/math.max(1,view.Y))
+ local span=b-a
+ zoom=math.clamp(math.max((span.Z*.73+span.X*.17+15)/.58,(span.X+span.Z*.23+12)/(.71*aspect)),96,190)
+ smoothed=zoom
 end
 function Camera.focus(p) target=Vector3.new(p.X,C.FieldOrigin.Y,p.Z) end
 function Camera.pause(v) paused=v;drag=false;table.clear(touches) end
 function Camera.start()
  local cam=workspace.CurrentCamera
  cam.CameraType=Enum.CameraType.Scriptable
- cam.FieldOfView=48
+ cam.FieldOfView=49
  UIS.InputBegan:Connect(function(input,gp)
   if gp or paused or UIS:GetFocusedTextBox() then return end
   if input.UserInputType==Enum.UserInputType.MouseButton2 then drag=true end
@@ -48,7 +53,7 @@ function Camera.start()
  end)
  UIS.InputChanged:Connect(function(input,gp)
   if paused then return end
-  if input.UserInputType==Enum.UserInputType.MouseWheel and not gp then zoom=math.clamp(zoom-input.Position.Z*8,30,147) end
+  if input.UserInputType==Enum.UserInputType.MouseWheel and not gp then zoom=math.clamp(zoom-input.Position.Z*8,32,195) end
   if drag and input.UserInputType==Enum.UserInputType.MouseMovement then
    pan(input.Delta.X,input.Delta.Y)
   end
@@ -64,7 +69,7 @@ function Camera.start()
   for item,p in pairs(touches) do if item~=input then companion=p;break end end
   touches[input]=now
   if companion then
-   zoom=math.clamp(zoom+((last-companion).Magnitude-(now-companion).Magnitude)*.16,30,147)
+   zoom=math.clamp(zoom+((last-companion).Magnitude-(now-companion).Magnitude)*.16,32,195)
   else
    local delta=now-last
    pan(delta.X,delta.Y)
