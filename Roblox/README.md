@@ -1,6 +1,6 @@
 # Checkpoint 1 in Roblox Studio
 
-Open [Place1-Checkpoint1.rbxl](Place1-Checkpoint1.rbxl) as a place in Studio. Press **Play → New Campaign → Start Campaign**. The earlier `HordeSteppeSteel.rbxm` model package is historical. It contains the prior hex prototype.
+Open [HordeSteppeSteel.rbxl](HordeSteppeSteel.rbxl) as a place in Studio. Press **Play → New Campaign → Start Campaign**. `Place1-Checkpoint1.rbxl` is the earlier 12-province build. The historical `HordeSteppeSteel.rbxm` model package contains the prior hex prototype and original gallery.
 
 ## Controls
 
@@ -17,7 +17,7 @@ Open [Place1-Checkpoint1.rbxl](Place1-Checkpoint1.rbxl) as a place in Studio. Pr
 | `ReplicatedStorage > HordeShared > Provinces, Board, Config` | Province and road definitions, spatial topology, rules configuration |
 | `ReplicatedStorage > HordeShared > Remotes > Command` | RemoteFunction for campaign commands and state snapshots |
 | `ServerScriptService > HordeServer > GameManager, CommandPolicy` | Campaign/turn identity, player and phase gates, payload checks, session snapshots |
-| `ServerScriptService > HordeServer > Match, AI, Renderer` | Campaign rules and common damage calculation, Rus decisions, native map visuals |
+| `ServerScriptService > HordeServer > Match, AI, Renderer, CampaignArt` | Campaign rules and common damage calculation, Rus decisions, native map visuals, portable adaptations of the archived library |
 | `StarterPlayer > StarterPlayerScripts > HordeClient` | Campaign controller, camera, main menu, HUD, and markers |
 | `Workspace > HordeWorld` | Per-match provinces, roads, armies and settlements created in Play |
 | `ServerStorage > HordeBeforeCheckpoint1` | Prior UI, server and shared script groups |
@@ -26,6 +26,6 @@ The `src/` tree mirrors the place scripts and does not need a build step when op
 
 ## Verification and demo
 
-- [Ten-step Studio test record](docs/Checkpoint1-Manual.md)
+- [Final ten-step Studio test record](docs/CHECKPOINT_1_MANUAL_TESTS.md)
 - [Server validation evidence](docs/Checkpoint1-Security.md)
 - [One-minute demonstration directions](docs/Checkpoint1-Demo.md)

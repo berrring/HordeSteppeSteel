@@ -49,17 +49,17 @@
 
 ## ADR-005: Move to Roblox
 
-- **Date recorded:** 2026-11-19. The named Checkpoint 1 milestone is November 26, 2026.
+- **Date recorded in the existing project log:** 2026-11-19. The formal migration decision date still needs team confirmation. The named Checkpoint 1 milestone is November 26, 2026.
 - **Decision owners:** Team Arsenal. Individual approval and formal signoff have not been recorded. Subsystem responsibilities in the README are provisional.
 - **Context:** The November 5 record below describes an active Godot implementation. The first Roblox implementation is documented by commits `09d3cd0`, `4c2575e`, and `e5ab5aa` on `roblox-playable-slice`. The Checkpoint 1 brief names the existing Roblox place as the demo target.
 - **Decision and rationale:** Continue in Roblox Studio. The existing place already integrated the Mongol art library, tactical UI, and a client/server campaign prototype. Roblox provides a single Studio environment for the map, server, client, and Play-mode review. Earlier team deliberations on engine choice are not documented here.
 - **Carried forward:** Twelve province names, positions and eighteen road links from the archived Godot full campaign, Mongol and Rus identities, turn-based orders, resource yields, and the five-color visual direction. The checkpoint adapts these to Roblox Luau and the existing Roblox damage calculation.
 - **Postponed:** Extra maps and factions, Godot's separate tactical scene and replay, recruitment and construction, border reinforcement and economic AI, a Rus victory condition based on taking Sarai, and persistent saves.
-- **Technical consequences:** Use an `.rbxl` place for the demo. Server scripts own orders, resources and phase changes. The client requests orders and displays snapshots. The old Godot logic stays available for reference. Roblox verification has its own [record](Roblox/docs/Checkpoint1-Manual.md).
+- **Technical consequences:** Use an `.rbxl` place for the demo. Server scripts own orders, resources and phase changes. The client requests orders and displays snapshots. The old Godot logic stays available for reference. The final standalone build is `Roblox/HordeSteppeSteel.rbxl`. Opaque showcase meshes are preserved, and the runtime uses native adaptations where Studio cannot render them after reopening. See the [final verification record](Roblox/docs/CHECKPOINT_1_MANUAL_TESTS.md).
 
 ## 2026-11-05 — Historical Godot campaign command and turn contract
 
-- Integrated Alen camera/terrain changes before campaign repairs.
+- Integrated changes from the Alen visual branch before campaign repairs. The historical Codex-authored revisions and human attribution are listed in [the contribution report](TEAM_CONTRIBUTIONS_CHECKPOINT_1.md).
 - Godot remains the implementation; the pasted Unity plan supplies gameplay
   scope, not a request to migrate engines. Both scenarios remain available.
 - Friendly orders move the entire army to an adjacent province; merging uses

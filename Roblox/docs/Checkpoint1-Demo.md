@@ -11,3 +11,12 @@ Open `Place1-Checkpoint1.rbxl` in Roblox Studio and press **Play**. Begin the ca
 | 50–60 s | Show Rus action feedback and **Turn 2 · Your turn**. Point out that income was credited and surviving Mongol armies can act again. |
 
 Rehearse once before recording. Start a fresh campaign for the actual take so the army positions and losses match this sequence. This file is a recording guide. No video is included.
+
+## Studio recordings
+
+- [Opening and army movement, 30 seconds](evidence/Demo-01-Opening.mp4).
+- [Combat and return to player control, 28 seconds](evidence/Demo-02-Combat.mp4).
+- [Complete opening in the final standalone save, 28 seconds](evidence/Final-Build-Opening.mp4).
+- [Campaign atlas screenshot](evidence/Campaign-Atlas.png).
+
+The first two clips total about 58 seconds. They were captured before the final menu-notification fix, which does not affect the recorded combat or turn sequence. The third clip is the shortened full opening captured after reopening the final save.

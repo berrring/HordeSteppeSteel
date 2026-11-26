@@ -67,3 +67,13 @@ necessary for subjective balance and pacing.
 - **Generated Output:** Updated Roblox place and Luau modules, province and command policies, Studio rule checks, the manual checklist, server validation evidence, demo directions, README and ADR updates.
 - **Student Review & Manual Modifications:** Human review, adjustments and approval pending. No student review or change is attributed here.
 - **Testing Procedure:** Actual Studio client controls for start, selection, march, battle and End Turn. Controlled live command checks for resource and order rejection, repeat turns and clean restart. Isolated server rule checks in Studio. See [manual results](Roblox/docs/Checkpoint1-Manual.md) and [server validation](Roblox/docs/Checkpoint1-Security.md).
+
+
+### Entry: Checkpoint 1 recovery and portable Studio delivery
+- **Team Member:** Team Arsenal project. Individual human ownership of this recovery is unconfirmed.
+- **Date:** 2026-11-26.
+- **AI Tool Used:** OpenAI Codex with Roblox Studio MCP. Antigravity produced the separately supplied audit of the earlier slice, used as secondary evidence.
+- **Assistance Scope:** Baseline comparison, authored model recovery, native geometry adaptations, campaign world, camera and selection improvements, standalone delivery, repository attribution and defense guide.
+- **Generated Output:** Luau render and camera revisions, presentation regression tests, standalone place, Studio demo captures, build verification and reports.
+- **Student Review & Manual Modifications:** Peer playtest and academic approval are pending. Earlier claims of human validation in this log are historical records and need confirmation from the named participants.
+- **Testing Procedure:** Reopened the repository place in a new Studio window, played the mouse-driven opening and ran server harnesses. See [the final matrix](CHECKPOINT_1_FINAL_REPORT.md) and [the final manual checklist](Roblox/docs/CHECKPOINT_1_MANUAL_TESTS.md).
