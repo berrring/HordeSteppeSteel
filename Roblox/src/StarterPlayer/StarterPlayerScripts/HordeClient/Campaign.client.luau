@@ -87,7 +87,7 @@ local function worldTile(point)
  if not f then return end
  local cursor=point or UIS:GetMouseLocation()
  local ray=workspace.CurrentCamera:ViewportPointToRay(cursor.X,cursor.Y)
- local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={f}
+ local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={f,w:FindFirstChild("Armies"),w:FindFirstChild("Settlements")}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*2500,params)
  if hit then return hit.Instance:GetAttribute("TileId") end
 end
@@ -131,10 +131,8 @@ local function markerPick(id,isProvince)
 end
 local function relocateFirst()
  selected=nil;provinceId="sarai";tileId="sarai"
- inspector=root.AbsoluteSize.X>=635
- local frontier=B.center(state.tiles.kiev)
- local south=B.center(state.tiles.urgench)
- Camera.configure(state,frontier:Lerp(south,.37)+Vector3.new(9,0,0))
+ inspector=false
+ Camera.configure(state)
 end
 request=function(action,payload)
  if busy then return false end
@@ -166,6 +164,7 @@ navigate=function(nextMode,goBack)
  if nextMode=="game" and (not state or state.result) then return end
  if nextMode=="pause" and (not state or state.result) then return end
  if goBack then returnTo=goBack end
+ if nextMode=="menu" or nextMode=="setup" then message="";bad=false end
  mode=nextMode
  Camera.pause(mode~="game")
  render()
